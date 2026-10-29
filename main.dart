@@ -331,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: tab == 4 ? const AccountPage() : Column(children: [
         _topTabs(titles),
-        if (tab == 0 || tab == 1) _countryPicker(),
+        if (tab == 2 || tab == 3) _countryPicker(),
         Expanded(child: loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFD50000)))
           : _content()),
