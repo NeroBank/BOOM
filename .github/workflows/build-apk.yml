@@ -25,18 +25,24 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Flutter
+      - name: Install Flutter SDK
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Verify Flutter installation
+      - name: Verify Flutter SDK
+        shell: bash
         run: |
+          set -eux
+          which flutter
+          which dart
           flutter --version
           flutter doctor -v
+          flutter pub --version
 
       - name: Generate Android platform files
+        shell: bash
         run: |
           cp lib/main.dart /tmp/boomgratulations_main.dart
           flutter create . --platforms=android --project-name boomgratulations
@@ -44,7 +50,9 @@ jobs:
           rm -f test/widget_test.dart
 
       - name: Install dependencies
-        run: flutter pub get
+        shell: bash
+        run: |
+          flutter pub get
 
       - name: Check Flutter source
         run: flutter analyze
