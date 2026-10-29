@@ -1,40 +1,213 @@
-# BOOMGRATULATIONS Flutter app
 
-A compact red-themed football app starter with Fixtures, Live, Picks, Results and Account screens.
+# 🔴 BOOMGRATULATIONS
 
-## Included
-- League/country grouping, countries sorted A–Z in the filter list
-- Fixture start time, country flag, league name/badge emoji, stadium name and 1/X/2 sample odds
-- League-position badges: 1–3 green, 4–15 blue, 16+ red with a crying emoji
-- Recent form indicators using green W, gold D and red L
-- Responsive Flutter UI and Android APK GitHub Actions workflow
-- Optional API-Football API-key build variable; API key is not hardcoded
+### Football Fixtures • Live Scores • AI Picks • Tips • Results
 
-## Important data note
-With a valid API-Football key, the app maps the `/fixtures` response for the selected date or live fixtures, retrieves `/standings` by league and season for team ranks, uses `/fixtures?last=50&status=FT-AET-PEN` for recent results, and attempts `/odds?date=YYYY-MM-DD` to map Match Winner Home/Draw/Away prices into 1/X/2. Match times are requested in the Africa/Lagos timezone. API coverage and quota depend on your plan; unavailable odds show as em dashes, and missing stadiums show as “Stadium not listed”. The included fallback demo rows are illustrative only and must not be treated as verified match data or betting advice. API-Football's documented endpoints and response behavior: https://www.api-football.com/documentation_v3.
+BOOMGRATULATIONS is a Flutter-based football application designed to provide football fixtures, match information, predictions, tips, league standings and results in one place.
 
-## Build an APK using GitHub Actions
-1. Create a GitHub repository named `boomgratulations`.
-2. Upload the contents of this ZIP to the repository root (not the ZIP file itself).
-3. Open **Settings → Secrets and variables → Actions → New repository secret**.
-4. Name the secret `API_FOOTBALL_KEY` and paste your private API-Football key. You can skip this for demo mode.
-5. Open **Actions → Build BOOMGRATULATIONS Android APK → Run workflow**.
-6. When the workflow finishes, open the successful run and download the `boomgratulations-release-apk` artifact.
-7. Extract the downloaded artifact ZIP on your phone and install `app-release.apk`. Android may ask you to allow installs from that source.
+---
 
-## Build locally
-Install Flutter SDK and Android SDK, then run:
-```bash
-flutter create . --platforms android --project-name boomgratulations
-flutter pub get
-flutter run
-flutter build apk --release
+## 🚀 Features
+
+- Football fixtures and match information
+- Live scores through API-Football
+- AI Picks and football predictions
+- Football tips
+- League tables and standings
+- Favourite matches
+- Dark mode and light mode
+- Red-themed user interface
+- Roboto and Montserrat typography
+- BOOMGRATULATIONS app branding and logo
+- Subscribe to Pro section
+
+---
+
+## 🛠️ Built With
+
+- Flutter
+- Dart
+- HTTP package
+- API-Football
+- Google Fonts: Montserrat
+- Roboto typography
+
+---
+
+## 📁 Project Structure
+
+```text
+boomgratulations/
+│
+├── android/
+├── assets/
+│   ├── icon/
+│   │   └── app_icon.jpg
+│   │
+│   ├── fonts/
+│   │   ├── Montserrat-Regular.ttf
+│   │   └── Montserrat-Bold.ttf
+│   │
+│   └── logo.jpg
+│
+├── lib/
+│   └── main.dart
+│
+├── test/
+├── pubspec.yaml
+└── README.md
 ```
 
-## Font note
-The app requests the `Times New Roman` font family. Android devices may not have that exact font installed, so Android can substitute a serif font unless the font file is licensed and bundled into the project.
+---
 
-## Troubleshooting
-- If Android says “App not installed”, uninstall an older app with the same package/signing identity or build a fresh APK.
-- GitHub Actions creates the APK; this ZIP is source/configuration, not a prebuilt APK.
-- Do not commit API keys into Dart source or Git history.
+## 📦 Requirements
+
+Before running the application, install:
+
+1. Flutter SDK
+2. Dart SDK (included with Flutter)
+3. Android Studio or VS Code
+4. Android SDK
+5. API-Football API key
+
+Check your Flutter installation:
+
+```bash
+flutter doctor
+```
+
+---
+
+## ⚙️ Installation
+
+Clone or download the project.
+
+Open your terminal in the project directory and run:
+
+```bash
+flutter pub get
+```
+
+---
+
+## 🔑 API-Football Configuration
+
+BOOMGRATULATIONS uses API-Football to retrieve football fixture and match information.
+
+API endpoint:
+
+```text
+https://v3.football.api-sports.io
+```
+
+Get your API key from:
+
+https://www.api-football.com/
+
+Pass your API key through Flutter's build define.
+
+### Run the application
+
+```bash
+flutter run --dart-define=API_FOOTBALL_KEY=YOUR_API_KEY
+```
+
+Replace `YOUR_API_KEY` with your actual API key.
+
+### Build the release APK
+
+```bash
+flutter build apk --release --dart-define=API_FOOTBALL_KEY=YOUR_API_KEY
+```
+
+**Security note:** A key embedded in an APK can be extracted. For a production app, consider routing API requests through a secure backend rather than distributing a private API key in the application.
+
+---
+
+## 🔤 Font Configuration
+
+The application uses:
+
+- **Roboto:** General text, match details, scores and buttons.
+- **Montserrat:** Branding, headings and premium sections.
+
+Montserrat font files are stored in:
+
+```text
+assets/fonts/
+├── Montserrat-Regular.ttf
+└── Montserrat-Bold.ttf
+```
+
+The fonts are registered in `pubspec.yaml`.
+
+---
+
+## 🎨 App Theme
+
+- Primary colour: Red
+- Dark mode: Supported
+- Light mode: Supported
+- Typography: Roboto + Montserrat
+- App logo: Existing JPG logo
+
+---
+
+## 📱 Android APK Output
+
+After a successful release build, locate the APK here:
+
+```text
+build/app/outputs/flutter-apk/app-release.apk
+```
+
+You can install the APK on a compatible Android device.
+
+---
+
+## ⭐ Pro Subscription
+
+The application includes a Subscribe to Pro section.
+
+Payment processing, subscription verification and premium account management must be connected to a payment provider and backend before accepting real subscriptions.
+
+---
+
+## ❤️ Favourite Matches
+
+Users can mark matches as favourites for easier access.
+
+---
+
+## 🔒 Security
+
+- Keep API credentials private.
+- Avoid uploading API keys to public Git repositories.
+- Use a secure backend for production API access.
+- Do not commit signing keys or passwords.
+
+---
+
+## 📌 Project Information
+
+**Project Name:** BOOMGRATULATIONS
+
+**Version:** 1.0.0+1
+
+**Framework:** Flutter
+
+**Platform:** Android
+
+**Category:** Football and Sports
+
+---
+
+## 📄 License
+
+All rights reserved unless a separate license is provided.
+
+---
+
+### BOOMGRATULATIONS
+
+**Football. Predictions. Results. All in One Place.**
