@@ -35,8 +35,7 @@ jobs:
         run: flutter pub get
         
 
-      - name: Install dependencies
-        run: flutter pub get
+    
 
       - name: Check Flutter source
         run: flutter analyze
