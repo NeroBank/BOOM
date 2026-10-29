@@ -1,3 +1,4 @@
+
 name: boomgratulations
 description: BOOMGRATULATIONS football fixtures, live scores, picks and results app.
 publish_to: 'none'
@@ -18,3 +19,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/app_icon.jpg
