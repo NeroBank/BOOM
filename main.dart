@@ -331,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: tab == 4 ? const AccountPage() : Column(children: [
         _topTabs(titles),
-        if (tab == 2 || tab == 3) _countryPicker(),
+        if (tab == 0 || tab == 1) _countryPicker(),
         Expanded(child: loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFD50000)))
           : _content()),
@@ -382,12 +382,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _content() {
     var visible = matches.where((m) => country == 'All' || m.country == country).toList();
     visible.sort((a,b) => a.country.compareTo(b.country));
-    if (tab == 1) visible = visible.where((m) => m.live).toList();
-    if (tab == 2) return ListView(children: [
+    if (tab == 1) {
+      visible = visible.where((m) => m.live).toList();
+    }
+    if (tab == 2) {
+      return ListView(children: [
       _sectionTitle('🔥 TODAY’S PICKS', 'Tips are informational, not guarantees'),
       ...matches.map((m) => _pickCard(m)),
-    ]);
-    if (tab == 3) return ListView(children: [
+      ]);
+    }
+    if (tab == 3) {
+      return ListView(children: [
       _sectionTitle('📋 RECENT RESULTS', apiKey.isEmpty ? 'Illustrative sample scores — configure API key for real results' : 'Recent completed fixtures from API-Football'),
       if (apiKey.isEmpty) ...[
         _resultRow('Real Madrid', '2 - 1', 'Barcelona', 'WIN'),
@@ -402,8 +407,11 @@ class _HomeScreenState extends State<HomeScreen> {
       }),
       if (apiKey.isNotEmpty && visible.isEmpty)
         const Padding(padding: EdgeInsets.all(16), child: Text('No recent finished matches returned by the provider.', style: TextStyle(color: Colors.black54, fontSize: 11))),
-    ]);
-    if (tab == 1 && visible.isEmpty) return const Center(child: Text('No live matches in this demo feed.'));
+      ]);
+    }
+    if (tab == 1 && visible.isEmpty) {
+      return const Center(child: Text('No live matches in this demo feed.'));
+    }
     return ListView(children: [
       if (tab == 1) _sectionTitle('🔴 LIVE MATCHES', 'Live feed requires a configured API key'),
       ...visible.map(_matchCard),
