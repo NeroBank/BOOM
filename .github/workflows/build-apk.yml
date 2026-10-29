@@ -26,7 +26,14 @@ jobs:
           cache: true
 
       - name: Generate Android platform files
-        run: flutter create . --platforms android --project-name boomgratulations
+        run: |
+          cp lib/main.dart /tmp/boomgratulations_main.dart
+          flutter create . --platforms android --project-name boomgratulations
+          cp /tmp/boomgratulations_main.dart lib/main.dart
+
+      - name: Install dependencies
+        run: flutter pub get
+        
 
       - name: Install dependencies
         run: flutter pub get
