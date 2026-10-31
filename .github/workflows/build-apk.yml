@@ -31,32 +31,32 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Verify Flutter SDK
-        run: flutter --version
+      - name: Verify Flutter installation
+        run: |
+          which flutter
+          flutter --version
+          flutter doctor -v
 
       - name: Generate Android platform files
-        shell: bash
         run: |
-          cp lib/main.dart /tmp/boomgratulations_main.dart
+          cp lib/main.dart /tmp/boom_main.dart
           flutter create . --platforms=android --project-name boomgratulations
-          cp /tmp/boomgratulations_main.dart lib/main.dart
+          cp /tmp/boom_main.dart lib/main.dart
           rm -f test/widget_test.dart
 
-      - name: Install dependencies
+      - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Check Flutter source
+      - name: Analyze Flutter code
         continue-on-error: true
         run: flutter analyze
 
-      - name: Build Android APK
+      - name: Build release APK
         env:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-        run: |
-          flutter build apk --release \
-            --dart-define=API_FOOTBALL_KEY="${API_FOOTBALL_KEY}"
+        run: flutter build apk --release --dart-define=API_FOOTBALL_KEY=${API_FOOTBALL_KEY}
 
-      - name: Upload APK artifact
+      - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: boomgratulations-release-apk
