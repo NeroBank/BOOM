@@ -517,7 +517,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _matchCard(Map<String, dynamic> fixture) {
     final fixtureInfo = fixture['fixture'] is Map ? fixture['fixture'] as Map : <String, dynamic>{};
     final status = fixtureInfo['status'] is Map ? fixtureInfo['status'] as Map : <String, dynamic>{};
-    final goals = fixture['goals'] is Map ? fixture['goals'] as Map : <String, dynamic>{};
+    final goals = fixture['goals'] is Map
+        ? Map<String, dynamic>.from(fixture['goals'] as Map)
+        : <String, dynamic>{};
     final league = fixture['league'] is Map ? fixture['league'] as Map : <String, dynamic>{};
     final short = (status['short'] ?? 'NS').toString();
     final time = (status['elapsed'] != null) ? "${status['elapsed']}'" : short;
@@ -548,7 +550,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final teams = fixture['teams'] is Map ? fixture['teams'] as Map : <String, dynamic>{};
     final home = teams['home'] is Map ? teams['home'] as Map : <String, dynamic>{};
     final away = teams['away'] is Map ? teams['away'] as Map : <String, dynamic>{};
-    final score = goals ?? (fixture['goals'] is Map ? fixture['goals'] as Map<String, dynamic> : <String, dynamic>{});
+    final score = goals ?? (fixture['goals'] is Map
+        ? Map<String, dynamic>.from(fixture['goals'] as Map)
+        : <String, dynamic>{});
     final homeScore = score['home'];
     final awayScore = score['away'];
     return Row(
