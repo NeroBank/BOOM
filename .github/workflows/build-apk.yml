@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source
+      - name: Get project files
         uses: actions/checkout@v4
 
       - name: Set up Java
@@ -25,41 +25,39 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Flutter SDK
+      - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Verify Flutter installation
-        run: |
-          which flutter
-          flutter --version
-          flutter doctor -v
+      - name: Check Flutter
+        run: flutter --version
 
-      - name: Generate Android platform files
+      - name: Prepare Android project
         run: |
           cp lib/main.dart /tmp/boom_main.dart
           flutter create . --platforms=android --project-name boomgratulations
           cp /tmp/boom_main.dart lib/main.dart
-          rm -f test/widget_test.dart
 
-      - name: Install Flutter dependencies
+      - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Analyze Flutter code
-        continue-on-error: true
+      - name: Check Dart code
         run: flutter analyze
+        continue-on-error: true
 
       - name: Build release APK
         env:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-        run: flutter build apk --release --dart-define=API_FOOTBALL_KEY=${API_FOOTBALL_KEY}
+        run: |
+          flutter build apk --release \
+            --dart-define=API_FOOTBALL_KEY="$API_FOOTBALL_KEY"
 
-      - name: Upload Android APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: boomgratulations-release-apk
+          name: BOOMGRATULATIONS-APK
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
