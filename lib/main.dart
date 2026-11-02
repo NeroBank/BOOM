@@ -9,7 +9,7 @@ const Color brandRed = Color(0xFFD50000);
 const Color winGreen = Color(0xFF218838);
 const Color drawGold = Color(0xFFFFC107);
 const Color lostRed = Color(0xFFD50000);
-const String appLogo = 'assets/icon/1793295048387.jpg';
+const String appLogo = 'assets/icon/boom_logo.png';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -323,7 +323,7 @@ class _HomeScreenState extends State<HomeScreen> {
           SizedBox(height: 7),
           Text('Small details.\nSmarter decisions.', style: TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)),
           SizedBox(height: 8),
-          Text('Fixtures 鈥� Live scores 鈥� League tables', style: TextStyle(color: Colors.white70, fontSize: 12)),
+          Text('Fixtures – Live scores – League tables', style: TextStyle(color: Colors.white70, fontSize: 12)),
         ],
       ),
     );
@@ -447,7 +447,7 @@ class _HomeScreenState extends State<HomeScreen> {
           else
             _standingsTable(),
           const SizedBox(height: 12),
-          const Text('Position colours: 1st and 3rd green; 4th鈥�10th yellow; 11th鈥�20th blue; relegation places red when identified by the competition data.', style: TextStyle(fontSize: 11)),
+          const Text('Position colours: 1st and 3rd green; 4th–10th yellow; 11th–20th blue; relegation places red when identified by the competition data.', style: TextStyle(fontSize: 11)),
         ],
       ),
     );
@@ -509,7 +509,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _tipCard(Icons.info_outline, 'About predictions', 'Current picks are basic table comparisons. A genuine AI model and verified prediction service can be added in a later stage.'),
         _tipCard(Icons.refresh, 'Refresh app data', 'Use the refresh icon at the top of the screen to request the latest available data.'),
         const SizedBox(height: 12),
-        const Text('BOOMGRATULATIONS 鈥� Version 1.0.0', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey)),
+        const Text('BOOMGRATULATIONS – Version 1.0.0', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey)),
       ],
     );
   }
@@ -532,7 +532,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Row(
               children: [
-                Expanded(child: Text('${league['name'] ?? 'Football'} 鈥� ${league['country'] ?? ''}', style: const TextStyle(fontSize: 10, color: Colors.grey))),
+                Expanded(child: Text('${league['name'] ?? 'Football'} – ${league['country'] ?? ''}', style: const TextStyle(fontSize: 10, color: Colors.grey))),
                 _statusBadge(short, time),
               ],
             ),
