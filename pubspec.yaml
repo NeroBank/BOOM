@@ -1,8 +1,8 @@
 
 name: boomgratulations
-description: BOOMGRATULATIONS football fixtures, live scores, picks and results app.
+description: BOOMGRATULATIONS football fixtures, live scores, predictions and results.
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: '>=3.10.0 <4.0.0'
@@ -16,6 +16,25 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.6
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/1793295048387.jpg
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/icon/1793295048387.jpg
+  adaptive_icon_background: "#D50000"
+  adaptive_icon_foreground: assets/icon/1793295048387.jpg
+  min_sdk_android: 21
+
+flutter_native_splash:
+  color: "#D50000"
+  image: assets/icon/1793295048387.jpg
+  android_12:
+    color: "#D50000"
+    image: assets/icon/1793295048387.jpg
