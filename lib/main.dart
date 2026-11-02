@@ -5,468 +5,408 @@ import 'package:http/http.dart' as http;
 
 const String apiKey = String.fromEnvironment('API_FOOTBALL_KEY');
 const String apiBase = 'https://v3.football.api-sports.io';
+const Color brandRed = Color(0xFFD50000);
+const Color winGreen = Color(0xFF218838);
+const Color drawGold = Color(0xFFFFC107);
+const Color lostRed = Color(0xFFD50000);
+const String appLogo = 'assets/icon/1793295048387.jpg';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const BoomgratulationsApp());
 }
 
-class BoomgratulationsApp extends StatefulWidget {
+class BoomgratulationsApp extends StatelessWidget {
   const BoomgratulationsApp({super.key});
-
-  @override
-  State<BoomgratulationsApp> createState() => _BoomgratulationsAppState();
-}
-
-class _BoomgratulationsAppState extends State<BoomgratulationsApp> {
-  ThemeMode _themeMode = ThemeMode.system;
-
-  void _setThemeMode(ThemeMode mode) {
-    setState(() => _themeMode = mode);
-  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'BOOMGRATULATIONS',
       debugShowCheckedModeBanner: false,
-      themeMode: _themeMode,
-      theme: _buildTheme(Brightness.light),
-      darkTheme: _buildTheme(Brightness.dark),
-      home: HomeScreen(
-        themeMode: _themeMode,
-        onThemeChanged: _setThemeMode,
-      ),
-    );
-  }
-
-  ThemeData _buildTheme(Brightness brightness) {
-    final bool isDark = brightness == Brightness.dark;
-    final ColorScheme scheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFFD50000),
-      brightness: brightness,
-    );
-
-    return ThemeData(
-      useMaterial3: true,
-      brightness: brightness,
-      colorScheme: scheme,
-      scaffoldBackgroundColor:
-          isDark ? const Color(0xFF121212) : const Color(0xFFF5F6F8),
-      cardColor: isDark ? const Color(0xFF202020) : Colors.white,
-      dividerColor: isDark ? Colors.white12 : Colors.black12,
-      appBarTheme: AppBarTheme(
-        backgroundColor: isDark ? const Color(0xFF9F0000) : const Color(0xFFD50000),
-        foregroundColor: Colors.white,
-        centerTitle: false,
-        elevation: 0,
-      ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: isDark ? const Color(0xFF1B1B1B) : Colors.white,
-        indicatorColor:
-            isDark ? const Color(0xFF512020) : const Color(0xFFFFDADA),
-        labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>(
-          (states) => TextStyle(
-            fontWeight: states.contains(WidgetState.selected)
-                ? FontWeight.bold
-                : FontWeight.normal,
-          ),
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: brandRed),
+        scaffoldBackgroundColor: const Color(0xFFF5F5F5),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: brandRed,
+          foregroundColor: Colors.white,
+          elevation: 0,
         ),
       ),
-      chipTheme: ChipThemeData(
-        backgroundColor: isDark ? const Color(0xFF303030) : const Color(0xFFF0F0F0),
-        side: BorderSide.none,
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: brandRed,
+          brightness: Brightness.dark,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF9B0000),
+          foregroundColor: Colors.white,
+        ),
       ),
+      home: const HomeScreen(),
     );
   }
 }
-
-enum MatchOutcome { win, draw, lost, upcoming }
-
-class MatchItem {
-  const MatchItem({
-    required this.home,
-    required this.away,
-    required this.league,
-    required this.time,
-    this.homePosition = '-',
-    this.awayPosition = '-',
-    this.homeForm = 'W D W',
-    this.awayForm = 'L D W',
-    this.homeGoals = '-',
-    this.awayGoals = '-',
-    this.outcome = MatchOutcome.upcoming,
-    this.prediction = 'Home or Draw',
-    this.confidence = 68,
-    this.status = 'Upcoming',
-  });
-
-  final String home;
-  final String away;
-  final String league;
-  final String time;
-  final String homePosition;
-  final String awayPosition;
-  final String homeForm;
-  final String awayForm;
-  final String homeGoals;
-  final String awayGoals;
-  final MatchOutcome outcome;
-  final String prediction;
-  final int confidence;
-  final String status;
-
-  factory MatchItem.fromApi(Map<String, dynamic> json) {
-    final fixture = json['fixture'] as Map<String, dynamic>? ?? {};
-    final teams = json['teams'] as Map<String, dynamic>? ?? {};
-    final leagueData = json['league'] as Map<String, dynamic>? ?? {};
-    final goals = json['goals'] as Map<String, dynamic>? ?? {};
-    final home = teams['home'] as Map<String, dynamic>? ?? {};
-    final away = teams['away'] as Map<String, dynamic>? ?? {};
-    final statusData = fixture['status'] as Map<String, dynamic>? ?? {};
-    final dateText = fixture['date']?.toString() ?? '';
-    String timeText = 'TBD';
-    if (dateText.isNotEmpty) {
-      final parsed = DateTime.tryParse(dateText)?.toLocal();
-      if (parsed != null) {
-        final hour = parsed.hour.toString().padLeft(2, '0');
-        final minute = parsed.minute.toString().padLeft(2, '0');
-        timeText = '$hour:$minute';
-      }
-    }
-
-    final homeGoal = goals['home'];
-    final awayGoal = goals['away'];
-    final isFinished = const ['FT', 'AET', 'PEN']
-        .contains(statusData['short']?.toString());
-    MatchOutcome outcome = MatchOutcome.upcoming;
-    if (isFinished && homeGoal is num && awayGoal is num) {
-      if (homeGoal > awayGoal) {
-        outcome = MatchOutcome.win;
-      } else if (homeGoal == awayGoal) {
-        outcome = MatchOutcome.draw;
-      } else {
-        outcome = MatchOutcome.lost;
-      }
-    }
-
-    return MatchItem(
-      home: home['name']?.toString() ?? 'Home team',
-      away: away['name']?.toString() ?? 'Away team',
-      league: leagueData['name']?.toString() ?? 'Football',
-      time: timeText,
-      homeGoals: homeGoal?.toString() ?? '-',
-      awayGoals: awayGoal?.toString() ?? '-',
-      outcome: outcome,
-      status: statusData['long']?.toString() ?? 'Upcoming',
-    );
-  }
-}
-
-const List<MatchItem> demoMatches = [
-  MatchItem(
-    home: 'Arsenal',
-    away: 'Chelsea',
-    league: 'Premier League',
-    time: '17:30',
-    homePosition: '2',
-    awayPosition: '6',
-    homeForm: 'W W D W W',
-    awayForm: 'W L W D W',
-    prediction: 'Arsenal or Draw',
-    confidence: 78,
-  ),
-  MatchItem(
-    home: 'Liverpool',
-    away: 'Tottenham',
-    league: 'Premier League',
-    time: '20:00',
-    homePosition: '1',
-    awayPosition: '5',
-    homeForm: 'W W W D W',
-    awayForm: 'L W D L W',
-    prediction: 'Over 1.5 Goals',
-    confidence: 82,
-  ),
-  MatchItem(
-    home: 'Barcelona',
-    away: 'Sevilla',
-    league: 'La Liga',
-    time: '18:00',
-    homePosition: '3',
-    awayPosition: '12',
-    homeForm: 'W W W L W',
-    awayForm: 'D L W L D',
-    prediction: 'Barcelona Win',
-    confidence: 75,
-  ),
-  MatchItem(
-    home: 'Inter',
-    away: 'Roma',
-    league: 'Serie A',
-    time: '19:45',
-    homePosition: '1',
-    awayPosition: '8',
-    homeForm: 'W D W W W',
-    awayForm: 'W D L W D',
-    prediction: 'Over 1.5 Goals',
-    confidence: 71,
-  ),
-];
 
 class FootballApi {
-  Future<List<MatchItem>> fetchFixtures() async {
-    if (apiKey.trim().isEmpty) {
-      throw Exception(
-        'API key is missing. Add API_FOOTBALL_KEY to your GitHub Actions build secret.',
-      );
+  FootballApi._();
+  static final FootballApi instance = FootballApi._();
+
+  bool get hasKey => apiKey.trim().isNotEmpty;
+
+  Future<List<Map<String, dynamic>>> getFixtures({
+    String? date,
+    String? status,
+  }) async {
+    final query = <String, String>{};
+    if (date != null) {
+      query['date'] = date;
+    } else if (status == 'live') {
+      query['live'] = 'all';
+    } else {
+      final now = DateTime.now();
+      query['from'] = _date(now);
+      query['to'] = _date(now.add(const Duration(days: 3)));
     }
+    if (status != null && status != 'live') query['status'] = status;
 
-    final today = DateTime.now();
-    final from = _dateString(today);
-    final to = _dateString(today.add(const Duration(days: 3)));
-    final uri = Uri.parse('$apiBase/fixtures').replace(
-      queryParameters: {
-        'from': from,
-        'to': to,
-      },
-    );
+    final data = await _request('/fixtures', query);
+    return _responseList(data);
+  }
 
+  Future<List<Map<String, dynamic>>> getStandings(int leagueId) async {
+    final now = DateTime.now();
+    final season = now.month >= 7 ? now.year : now.year - 1;
+    final data = await _request('/standings', {
+      'league': '$leagueId',
+      'season': '$season',
+    });
+    final response = _responseList(data);
+    if (response.isEmpty) return [];
+    final league = response.first['league'];
+    if (league is! Map) return [];
+    final standings = league['standings'];
+    if (standings is! List || standings.isEmpty) return [];
+    final firstGroup = standings.first;
+    if (firstGroup is! List) return [];
+    return firstGroup.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Future<Map<String, dynamic>> _request(
+    String endpoint,
+    Map<String, String> query,
+  ) async {
+    if (!hasKey) {
+      throw Exception('API key is missing. Add API_FOOTBALL_KEY to GitHub Actions secrets.');
+    }
+    final uri = Uri.parse('$apiBase$endpoint').replace(queryParameters: query);
     final response = await http.get(
       uri,
-      headers: {
-        'x-apisports-key': apiKey,
-      },
+      headers: {'x-apisports-key': apiKey},
     ).timeout(const Duration(seconds: 25));
-
     if (response.statusCode != 200) {
-      throw Exception('Football API returned status ${response.statusCode}.');
+      throw Exception('Football data service returned ${response.statusCode}.');
     }
-
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Unexpected response from football data service.');
+    }
     final errors = decoded['errors'];
     if (errors is Map && errors.isNotEmpty) {
-      throw Exception('Football API error: ${errors.values.join(', ')}');
+      throw Exception(errors.values.join(', '));
     }
-
-    final responseItems = decoded['response'];
-    if (responseItems is! List) {
-      throw Exception('The API returned an unexpected fixture format.');
-    }
-
-    return responseItems
-        .whereType<Map<String, dynamic>>()
-        .map(MatchItem.fromApi)
-        .toList();
+    return decoded;
   }
 
-  String _dateString(DateTime date) {
-    final y = date.year.toString().padLeft(4, '0');
-    final m = date.month.toString().padLeft(2, '0');
-    final d = date.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
+  List<Map<String, dynamic>> _responseList(Map<String, dynamic> data) {
+    final value = data['response'];
+    if (value is! List) return [];
+    return value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
   }
+
+  String _date(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({
-    super.key,
-    required this.themeMode,
-    required this.onThemeChanged,
-  });
-
-  final ThemeMode themeMode;
-  final ValueChanged<ThemeMode> onThemeChanged;
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final FootballApi _footballApi = FootballApi();
   int _tab = 0;
   bool _loading = false;
   String? _error;
-  List<MatchItem> _matches = demoMatches;
+  String _fixtureFilter = 'All';
+  List<Map<String, dynamic>> _fixtures = [];
+  List<Map<String, dynamic>> _live = [];
+  List<Map<String, dynamic>> _standings = [];
+  int _leagueId = 39;
+  String _leagueName = 'Premier League';
+
+  static const Map<String, int> leagues = {
+    'Premier League': 39,
+    'La Liga': 140,
+    'Serie A': 135,
+    'Bundesliga': 78,
+    'Ligue 1': 61,
+    'Nigeria Premier League': 399,
+    'UEFA Champions League': 2,
+  };
 
   @override
   void initState() {
     super.initState();
-    _refresh(showMessage: false);
+    _loadAll();
   }
 
-  Future<void> _refresh({bool showMessage = true}) async {
+  Future<void> _loadAll() async {
     setState(() {
       _loading = true;
       _error = null;
     });
-
     try {
-      final result = await _footballApi.fetchFixtures();
+      final results = await Future.wait([
+        FootballApi.instance.getFixtures(),
+        FootballApi.instance.getFixtures(status: 'live'),
+        FootballApi.instance.getStandings(_leagueId),
+      ]);
       if (!mounted) return;
       setState(() {
-        _matches = result;
-        _loading = false;
+        _fixtures = results[0];
+        _live = results[1];
+        _standings = results[2];
       });
-      if (showMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Fixtures updated successfully.')),
-        );
-      }
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = e.toString().replaceFirst('Exception: ', '');
-      });
+      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _changeLeague(String name) async {
+    setState(() {
+      _leagueName = name;
+      _leagueId = leagues[name]!;
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final table = await FootballApi.instance.getStandings(_leagueId);
+      if (mounted) setState(() => _standings = table);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final pages = <Widget>[
+    final pages = [
       _fixturesPage(),
-      _predictionsPage(),
+      _livePage(),
+      _picksPage(),
       _tipsPage(),
       _tablePage(),
+      _accountPage(),
     ];
-
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 16,
-        title: const Row(
+        titleSpacing: 12,
+        title: Row(
           children: [
-            Icon(Icons.sports_soccer, size: 25),
-            SizedBox(width: 8),
-            Flexible(
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                appLogo,
+                width: 35,
+                height: 35,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const Icon(Icons.sports_soccer, size: 32),
+              ),
+            ),
+            const SizedBox(width: 9),
+            const Expanded(
               child: Text(
                 'BOOMGRATULATIONS',
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
               ),
             ),
           ],
         ),
         actions: [
-          PopupMenuButton<ThemeMode>(
-            tooltip: 'Change appearance',
-            icon: const Icon(Icons.brightness_6),
-            initialValue: widget.themeMode,
-            onSelected: widget.onThemeChanged,
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: ThemeMode.light,
-                child: _themeMenuItem(Icons.light_mode, 'Light Mode'),
-              ),
-              PopupMenuItem(
-                value: ThemeMode.dark,
-                child: _themeMenuItem(Icons.dark_mode, 'Dark Mode'),
-              ),
-              PopupMenuItem(
-                value: ThemeMode.system,
-                child: _themeMenuItem(Icons.settings_brightness, 'System Default'),
-              ),
-            ],
-          ),
           IconButton(
-            onPressed: _refresh,
+            tooltip: 'Refresh data',
+            onPressed: _loading ? null : _loadAll,
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh fixtures',
           ),
         ],
       ),
-      body: SafeArea(child: pages[_tab]),
+      body: Column(
+        children: [
+          if (_loading) const LinearProgressIndicator(minHeight: 2),
+          if (_error != null) _errorBanner(_error!),
+          Expanded(child: pages[_tab]),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
-        onDestinationSelected: (index) => setState(() => _tab = index),
+        onDestinationSelected: (value) => setState(() => _tab = value),
         destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month),
-            label: 'Fixtures',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.auto_awesome_outlined),
-            selectedIcon: Icon(Icons.auto_awesome),
-            label: 'AI Picks',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.lightbulb_outline),
-            selectedIcon: Icon(Icons.lightbulb),
-            label: 'Tips',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.leaderboard_outlined),
-            selectedIcon: Icon(Icons.leaderboard),
-            label: 'Table',
-          ),
+          NavigationDestination(icon: Icon(Icons.calendar_month), label: 'Fixtures'),
+          NavigationDestination(icon: Icon(Icons.circle, size: 17), label: 'Live'),
+          NavigationDestination(icon: Icon(Icons.auto_awesome), label: 'Picks'),
+          NavigationDestination(icon: Icon(Icons.lightbulb_outline), label: 'Tips'),
+          NavigationDestination(icon: Icon(Icons.leaderboard), label: 'Table'),
+          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Account'),
         ],
       ),
     );
   }
 
-  Widget _themeMenuItem(IconData icon, String label) {
-    return Row(
-      children: [
-        Icon(icon, size: 20),
-        const SizedBox(width: 12),
-        Text(label),
-      ],
+  Widget _errorBanner(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      color: Colors.orange.withValues(alpha: 0.15),
+      child: Text(message, style: const TextStyle(fontSize: 12)),
     );
   }
 
   Widget _fixturesPage() {
+    final matches = _fixtures.where((m) {
+      final status = _statusShort(m);
+      if (_fixtureFilter == 'All') return true;
+      if (_fixtureFilter == 'Finished') return const ['FT', 'AET', 'PEN'].contains(status);
+      if (_fixtureFilter == 'Upcoming') return status == 'NS';
+      return false;
+    }).toList();
+
     return RefreshIndicator(
-      onRefresh: () => _refresh(showMessage: false),
+      onRefresh: _loadAll,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
+        padding: const EdgeInsets.all(14),
         children: [
           _welcomeBanner(),
-          const SizedBox(height: 14),
-          _sectionTitle('Today鈥檚 Fixtures', 'Matches and kickoff times'),
-          if (_loading) ...[
-            const SizedBox(height: 8),
-            const LinearProgressIndicator(),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: 10),
-            _messageCard(
-              icon: Icons.info_outline,
-              title: 'Showing demo fixtures',
-              message:
-                  'Live fixtures could not be loaded. ${_error!} You can still explore the app using sample data.',
-            ),
-          ],
+          const SizedBox(height: 15),
+          _sectionTitle('Football fixtures', 'Real match data'),
+          const SizedBox(height: 10),
+          _filterChips(),
           const SizedBox(height: 8),
-          if (_matches.isEmpty)
-            _messageCard(
-              icon: Icons.event_busy,
-              title: 'No fixtures found',
-              message: 'Try refreshing, or check again later.',
-            )
+          if (matches.isEmpty)
+            _emptyState('No fixtures found', 'Refresh later or check your API plan.')
           else
-            ..._matches.map(_matchCard),
-          const SizedBox(height: 12),
-          _sectionTitle('Quick Form Guide', 'Recent results at a glance'),
-          _formLegend(),
+            ...matches.map(_matchCard),
         ],
       ),
     );
   }
 
-  Widget _predictionsPage() {
-    final matches = _matches;
+  Widget _welcomeBanner() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [brandRed, Color(0xFF850000)]),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('YOUR FOOTBALL CENTRE', style: TextStyle(color: Colors.white70, fontSize: 11, letterSpacing: 1.2)),
+          SizedBox(height: 7),
+          Text('Small details.\nSmarter decisions.', style: TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)),
+          SizedBox(height: 8),
+          Text('Fixtures 鈥� Live scores 鈥� League tables', style: TextStyle(color: Colors.white70, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChips() {
+    return Wrap(
+      spacing: 8,
+      children: ['All', 'Upcoming', 'Finished'].map((filter) {
+        return ChoiceChip(
+          label: Text(filter),
+          selected: _fixtureFilter == filter,
+          selectedColor: brandRed.withValues(alpha: 0.18),
+          onSelected: (_) => setState(() => _fixtureFilter = filter),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _livePage() {
+    return RefreshIndicator(
+      onRefresh: _loadAll,
+      child: ListView(
+        padding: const EdgeInsets.all(14),
+        children: [
+          _sectionTitle('Live matches', 'Scores update when refreshed'),
+          const SizedBox(height: 12),
+          if (_live.isEmpty)
+            _emptyState('No live matches right now', 'Live fixtures will appear here when available.')
+          else
+            ..._live.map(_matchCard),
+        ],
+      ),
+    );
+  }
+
+  Widget _picksPage() {
+    final rows = _standings;
+    final picks = <Map<String, dynamic>>[];
+    for (final fixture in _fixtures) {
+      final teams = fixture['teams'];
+      if (teams is! Map) continue;
+      final home = teams['home'];
+      final away = teams['away'];
+      if (home is! Map || away is! Map) continue;
+      final homeId = home['id'];
+      final awayId = away['id'];
+      final homeRow = rows.where((r) => r['team'] is Map && r['team']['id'] == homeId).firstOrNull;
+      final awayRow = rows.where((r) => r['team'] is Map && r['team']['id'] == awayId).firstOrNull;
+      if (homeRow == null || awayRow == null) continue;
+      final hp = _number(homeRow['points']);
+      final ap = _number(awayRow['points']);
+      if ((hp - ap).abs() < 4) continue;
+      picks.add({
+        'fixture': fixture,
+        'selection': hp > ap ? 'Home team has stronger table points' : 'Away team has stronger table points',
+        'edge': (hp - ap).abs(),
+      });
+    }
     return ListView(
       padding: const EdgeInsets.all(14),
       children: [
-        _sectionTitle('AI Predictions', 'Demo suggestions 鈥� not guaranteed results'),
-        _messageCard(
-          icon: Icons.auto_awesome,
-          title: 'Prediction guide',
-          message:
-              'These sample picks are illustrative. The app does not yet calculate a verified AI model from live team statistics.',
-        ),
+        _sectionTitle('Table-based picks', 'Simple statistical comparison'),
         const SizedBox(height: 8),
-        ...matches.map((match) => _predictionCard(match)),
+        const Text('These are basic comparisons using the selected league table, not guaranteed results or a trained AI model.', style: TextStyle(fontSize: 12)),
+        const SizedBox(height: 12),
+        if (picks.isEmpty)
+          _emptyState('Not enough data for picks', 'Load the league table and upcoming fixtures first.')
+        else
+          ...picks.map((pick) => Card(
+            child: Padding(
+              padding: const EdgeInsets.all(13),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _fixtureTeams(pick['fixture'] as Map<String, dynamic>),
+                  const SizedBox(height: 8),
+                  Text(pick['selection'] as String, style: const TextStyle(fontWeight: FontWeight.bold, color: winGreen)),
+                  Text('Points difference: ${pick['edge']}', style: const TextStyle(fontSize: 11)),
+                ],
+              ),
+            ),
+          )),
       ],
     );
   }
@@ -475,476 +415,291 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView(
       padding: const EdgeInsets.all(14),
       children: [
-        _sectionTitle('Football Tips', 'Quick information for match analysis'),
-        _tipCard(
-          Icons.sports_soccer,
-          'Over 1.5 Goals',
-          'Consider recent scoring and conceding records for both teams.',
-          const Color(0xFF18864B),
-        ),
-        _tipCard(
-          Icons.balance,
-          'Double Chance',
-          'Compare home and away form before considering 1X or X2.',
-          const Color(0xFFB8860B),
-        ),
-        _tipCard(
-          Icons.shield_outlined,
-          'Team Form',
-          'Check the last five matches, opponent strength, and home/away splits.',
-          const Color(0xFF2879C7),
-        ),
-        _tipCard(
-          Icons.table_chart_outlined,
-          'League Position',
-          'Use the table as context, not as the only reason for a prediction.',
-          const Color(0xFFD50000),
-        ),
-        _messageCard(
-          icon: Icons.info_outline,
-          title: 'Please remember',
-          message:
-              'Tips are informational and can be wrong. No prediction guarantees a win.',
-        ),
+        _sectionTitle('Football tips', 'How to read the numbers'),
+        const SizedBox(height: 12),
+        _tipCard(Icons.table_chart, 'Check the league table', 'Compare points, position, goals scored and goals conceded.'),
+        _tipCard(Icons.home_outlined, 'Separate home and away form', 'A team can be strong at home but weaker when playing away.'),
+        _tipCard(Icons.history, 'Review recent form and H2H', 'Look at recent results and head-to-head meetings, while remembering that past results do not guarantee the next result.'),
+        _tipCard(Icons.sports_soccer, 'Check team news', 'Injuries, suspensions and rotation can change a match outlook.'),
+        _tipCard(Icons.verified_outlined, 'Use verified information', 'Confirm match time, competition and team news before making a decision.'),
       ],
     );
   }
 
   Widget _tablePage() {
-    final rows = <_LeagueRow>[
-      _LeagueRow(1, 'Liverpool', 24, 58),
-      _LeagueRow(2, 'Arsenal', 23, 52),
-      _LeagueRow(3, 'Barcelona', 22, 49),
-      _LeagueRow(4, 'Manchester City', 22, 47),
-      _LeagueRow(5, 'Tottenham', 21, 42),
-      _LeagueRow(6, 'Chelsea', 20, 38),
-      _LeagueRow(7, 'Aston Villa', 20, 36),
-      _LeagueRow(8, 'Newcastle', 19, 34),
-      _LeagueRow(9, 'West Ham', 18, 31),
-      _LeagueRow(10, 'Brighton', 18, 29),
-      _LeagueRow(11, 'Fulham', 17, 27),
-      _LeagueRow(12, 'Wolves', 17, 25),
-      _LeagueRow(13, 'Crystal Palace', 16, 23),
-      _LeagueRow(14, 'Everton', 16, 22),
-      _LeagueRow(15, 'Brentford', 15, 21),
-      _LeagueRow(16, 'Nottingham Forest', 15, 19),
-      _LeagueRow(17, 'Luton Town', 14, 17),
-      _LeagueRow(18, 'Burnley', 14, 13),
-      _LeagueRow(19, 'Sheffield United', 13, 10),
-      _LeagueRow(20, 'Bournemouth', 13, 8),
-    ];
+    return RefreshIndicator(
+      onRefresh: () async => _changeLeague(_leagueName),
+      child: ListView(
+        padding: const EdgeInsets.all(14),
+        children: [
+          _sectionTitle('League table', 'Choose a competition'),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: _leagueName,
+            isExpanded: true,
+            decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'League'),
+            items: leagues.keys.map((name) => DropdownMenuItem(value: name, child: Text(name))).toList(),
+            onChanged: (value) { if (value != null) _changeLeague(value); },
+          ),
+          const SizedBox(height: 12),
+          if (_standings.isEmpty)
+            _emptyState('No table data available', 'Check your API key and league access.')
+          else
+            _standingsTable(),
+          const SizedBox(height: 12),
+          const Text('Position colours: 1st and 3rd green; 4th鈥�10th yellow; 11th鈥�20th blue; relegation places red when identified by the competition data.', style: TextStyle(fontSize: 11)),
+        ],
+      ),
+    );
+  }
 
-    return ListView(
-      padding: const EdgeInsets.all(14),
-      children: [
-        _sectionTitle('League Table', 'Illustrative sample standings'),
-        _messageCard(
-          icon: Icons.info_outline,
-          title: 'Sample data',
-          message:
-              'This table is for layout demonstration and is not a live league table. Team positions and points must be connected to a standings API for real rankings.',
+  Widget _standingsTable() {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columns: const [
+            DataColumn(label: Text('#')),
+            DataColumn(label: Text('Team')),
+            DataColumn(label: Text('P')),
+            DataColumn(label: Text('GD')),
+            DataColumn(label: Text('Pts')),
+            DataColumn(label: Text('Form')),
+          ],
+          rows: _standings.map((row) {
+            final rank = _number(row['rank']);
+            final team = row['team'] is Map ? row['team']['name']?.toString() ?? 'Unknown' : 'Unknown';
+            final description = (row['description'] ?? '').toString().toLowerCase();
+            final color = _positionColor(rank, description);
+            return DataRow(cells: [
+              DataCell(_positionBadge(rank, color)),
+              DataCell(SizedBox(width: 145, child: Text(team, overflow: TextOverflow.ellipsis))),
+              DataCell(Text('${row['all'] is Map ? row['all']['played'] ?? 0 : 0}')),
+              DataCell(Text('${row['goalsDiff'] ?? 0}')),
+              DataCell(Text('${row['points'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold))),
+              DataCell(_formDots((row['form'] ?? '').toString())),
+            ]);
+          }).toList(),
         ),
-        const SizedBox(height: 10),
-        Card(
-          clipBehavior: Clip.antiAlias,
+      ),
+    );
+  }
+
+  Widget _accountPage() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Center(
           child: Column(
             children: [
-              Container(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                child: const Row(
-                  children: [
-                    SizedBox(width: 34, child: Text('#', style: TextStyle(fontWeight: FontWeight.bold))),
-                    Expanded(child: Text('Team', style: TextStyle(fontWeight: FontWeight.bold))),
-                    SizedBox(width: 40, child: Text('MP', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold))),
-                    SizedBox(width: 45, child: Text('Pts', textAlign: TextAlign.end, style: TextStyle(fontWeight: FontWeight.bold))),
-                  ],
-                ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.asset(appLogo, width: 90, height: 90, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.sports_soccer, size: 80, color: brandRed)),
               ),
-              ...rows.map((row) {
-                final color = _tablePositionColor(row.position);
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: Theme.of(context).dividerColor),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 25,
-                        height: 25,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '${row.position}',
-                          style: TextStyle(
-                            color: row.position >= 4 && row.position <= 10
-                                ? Colors.black
-                                : Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 9),
-                      Expanded(child: Text(row.team, overflow: TextOverflow.ellipsis)),
-                      SizedBox(width: 40, child: Text('${row.played}', textAlign: TextAlign.center)),
-                      SizedBox(width: 45, child: Text('${row.points}', textAlign: TextAlign.end, style: const TextStyle(fontWeight: FontWeight.bold))),
-                    ],
-                  ),
-                );
-              }),
+              const SizedBox(height: 12),
+              const Text('BOOMGRATULATIONS', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+              const Text('Football information at a glance', style: TextStyle(color: Colors.grey)),
             ],
           ),
         ),
+        const SizedBox(height: 22),
+        _tipCard(Icons.cloud_done_outlined, 'Data connection', FootballApi.instance.hasKey ? 'API key detected in this build.' : 'API key has not been supplied to this build.'),
+        _tipCard(Icons.info_outline, 'About predictions', 'Current picks are basic table comparisons. A genuine AI model and verified prediction service can be added in a later stage.'),
+        _tipCard(Icons.refresh, 'Refresh app data', 'Use the refresh icon at the top of the screen to request the latest available data.'),
         const SizedBox(height: 12),
-        _tableLegend(),
+        const Text('BOOMGRATULATIONS 鈥� Version 1.0.0', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey)),
       ],
     );
   }
 
-  Color _tablePositionColor(int position) {
-    if (position == 1 || position == 3) return const Color(0xFF218838);
-    if (position >= 4 && position <= 10) return const Color(0xFFFFD54F);
-    if (position >= 11 && position <= 17) return const Color(0xFF2879C7);
-    return const Color(0xFFD50000);
+  Widget _matchCard(Map<String, dynamic> fixture) {
+    final fixtureInfo = fixture['fixture'] is Map ? fixture['fixture'] as Map : <String, dynamic>{};
+    final status = fixtureInfo['status'] is Map ? fixtureInfo['status'] as Map : <String, dynamic>{};
+    final goals = fixture['goals'] is Map ? fixture['goals'] as Map : <String, dynamic>{};
+    final league = fixture['league'] is Map ? fixture['league'] as Map : <String, dynamic>{};
+    final short = (status['short'] ?? 'NS').toString();
+    final time = (status['elapsed'] != null) ? "${status['elapsed']}'" : short;
+    final dateText = fixtureInfo['date']?.toString() ?? '';
+    return Card(
+      margin: const EdgeInsets.only(bottom: 9),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text('${league['name'] ?? 'Football'} 鈥� ${league['country'] ?? ''}', style: const TextStyle(fontSize: 10, color: Colors.grey))),
+                _statusBadge(short, time),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _fixtureTeams(fixture, goals: goals),
+            const SizedBox(height: 7),
+            Align(alignment: Alignment.centerRight, child: Text(_formatDate(dateText), style: const TextStyle(fontSize: 10, color: Colors.grey))),
+          ],
+        ),
+      ),
+    );
   }
 
-  Widget _welcomeBanner() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFD50000), Color(0xFF8E0000)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+  Widget _fixtureTeams(Map<String, dynamic> fixture, {Map<String, dynamic>? goals}) {
+    final teams = fixture['teams'] is Map ? fixture['teams'] as Map : <String, dynamic>{};
+    final home = teams['home'] is Map ? teams['home'] as Map : <String, dynamic>{};
+    final away = teams['away'] is Map ? teams['away'] as Map : <String, dynamic>{};
+    final score = goals ?? (fixture['goals'] is Map ? fixture['goals'] as Map<String, dynamic> : <String, dynamic>{});
+    final homeScore = score['home'];
+    final awayScore = score['away'];
+    return Row(
+      children: [
+        Expanded(child: _teamName(home['name']?.toString() ?? 'Home team', home['logo']?.toString())),
+        SizedBox(
+          width: 65,
+          child: Text(
+            homeScore == null && awayScore == null ? 'VS' : '$homeScore - $awayScore',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+          ),
         ),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'YOUR MATCH CENTRE',
-            style: TextStyle(color: Colors.white70, fontSize: 11, letterSpacing: 1.3, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 7),
-          Text(
-            'Predict smarter.',
-            style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
-          ),
-          SizedBox(height: 5),
-          Text(
-            'Fixtures, form guides and match insights in one place.',
-            style: TextStyle(color: Colors.white, height: 1.35),
-          ),
+        Expanded(child: _teamName(away['name']?.toString() ?? 'Away team', away['logo']?.toString(), alignEnd: true)),
+      ],
+    );
+  }
+
+  Widget _teamName(String name, String? logo, {bool alignEnd = false}) {
+    return Row(
+      mainAxisAlignment: alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+      children: [
+        if (!alignEnd) ...[
+          _teamLogo(logo),
+          const SizedBox(width: 6),
         ],
-      ),
+        Flexible(child: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: alignEnd ? TextAlign.right : TextAlign.left, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
+        if (alignEnd) ...[
+          const SizedBox(width: 6),
+          _teamLogo(logo),
+        ],
+      ],
+    );
+  }
+
+  Widget _teamLogo(String? url) {
+    if (url == null || url.isEmpty) return const SizedBox(width: 23, height: 23);
+    return Image.network(url, width: 23, height: 23, fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => const SizedBox(width: 23, height: 23));
+  }
+
+  Widget _statusBadge(String status, String label) {
+    final live = const ['1H', '2H', 'HT', 'ET', 'P', 'LIVE'].contains(status);
+    final finished = const ['FT', 'AET', 'PEN'].contains(status);
+    final color = live ? winGreen : finished ? Colors.grey : brandRed;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+      child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color)),
     );
   }
 
   Widget _sectionTitle(String title, String subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+        Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+      ],
+    );
+  }
+
+  Widget _emptyState(String title, String message) {
     return Padding(
-      padding: const EdgeInsets.only(top: 6, bottom: 8),
+      padding: const EdgeInsets.symmetric(vertical: 45, horizontal: 18),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 3),
-          Text(subtitle, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
+          const Icon(Icons.sports_soccer_outlined, size: 42, color: Colors.grey),
+          const SizedBox(height: 10),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 5),
+          Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.grey)),
         ],
       ),
     );
   }
 
-  Widget _matchCard(MatchItem match) {
+  Widget _tipCard(IconData icon, String title, String body) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(13),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    match.league,
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _outcomeBadge(match),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _teamLine(match.home, match.homePosition, match.homeForm)),
-                SizedBox(
-                  width: 58,
-                  child: Column(
-                    children: [
-                      Text(
-                        match.homeGoals == '-' || match.awayGoals == '-'
-                            ? match.time
-                            : '${match.homeGoals} - ${match.awayGoals}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(match.status, textAlign: TextAlign.center, style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
-                ),
-                Expanded(child: _teamLine(match.away, match.awayPosition, match.awayForm, alignEnd: true)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Divider(height: 1, color: Theme.of(context).dividerColor),
-            const SizedBox(height: 9),
-            Row(
-              children: [
-                const Icon(Icons.auto_awesome, size: 16, color: Color(0xFFD50000)),
-                const SizedBox(width: 6),
-                Expanded(child: Text('Tip: ${match.prediction}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
-                Text('${match.confidence}%', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _teamLine(String team, String position, String form, {bool alignEnd = false}) {
-    final alignment = alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    return Column(
-      crossAxisAlignment: alignment,
-      children: [
-        Row(
-          mainAxisAlignment: alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
-          children: [
-            if (!alignEnd) ...[
-              _positionChip(position),
-              const SizedBox(width: 5),
-            ],
-            Flexible(
-              child: Text(
-                team,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: alignEnd ? TextAlign.end : TextAlign.start,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-              ),
-            ),
-            if (alignEnd) ...[
-              const SizedBox(width: 5),
-              _positionChip(position),
-            ],
-          ],
-        ),
-        const SizedBox(height: 5),
-        Text(form, textAlign: alignEnd ? TextAlign.end : TextAlign.start, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-      ],
-    );
-  }
-
-  Widget _positionChip(String position) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(5),
-      ),
-      child: Text(position == '-' ? '鈥�' : '#$position', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-    );
-  }
-
-  Widget _outcomeBadge(MatchItem match) {
-    final Color color;
-    final String text;
-    switch (match.outcome) {
-      case MatchOutcome.win:
-        color = const Color(0xFF218838);
-        text = 'WIN';
-        break;
-      case MatchOutcome.draw:
-        color = const Color(0xFFFFC107);
-        text = 'DRAW';
-        break;
-      case MatchOutcome.lost:
-        color = const Color(0xFFD50000);
-        text = 'LOST';
-        break;
-      case MatchOutcome.upcoming:
-        color = const Color(0xFF2879C7);
-        text = 'FIXTURE';
-        break;
-    }
-
-    final foreground = match.outcome == MatchOutcome.draw ? Colors.black : Colors.white;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
-      child: Text(text, style: TextStyle(color: foreground, fontSize: 9, fontWeight: FontWeight.w900)),
-    );
-  }
-
-  Widget _predictionCard(MatchItem match) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(match.league, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 7),
-            Text('${match.home} vs ${match.away}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Icon(Icons.auto_awesome, color: Color(0xFFD50000)),
-                const SizedBox(width: 7),
-                Expanded(child: Text(match.prediction, style: const TextStyle(fontWeight: FontWeight.bold))),
-                Text('${match.confidence}%', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF218838))),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: LinearProgressIndicator(
-                value: match.confidence.clamp(0, 100) / 100,
-                minHeight: 6,
-                backgroundColor: Theme.of(context).dividerColor,
-                color: const Color(0xFFD50000),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _tipCard(IconData icon, String title, String description, Color color) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 9),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        leading: CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.14),
-          child: Icon(icon, color: color),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(description),
-        ),
+        leading: CircleAvatar(backgroundColor: brandRed.withValues(alpha: 0.10), child: Icon(icon, color: brandRed)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        subtitle: Text(body, style: const TextStyle(fontSize: 11)),
       ),
     );
   }
 
-  Widget _messageCard({
-    required IconData icon,
-    required String title,
-    required String message,
-  }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(13),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: const Color(0xFFD50000)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
-                  Text(message, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.35, fontSize: 12)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+  Widget _positionBadge(int rank, Color color) {
+    return Container(
+      width: 25,
+      height: 25,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(7)),
+      child: Text('$rank', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
     );
   }
 
-  Widget _formLegend() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          children: const [
-            _FormDot(label: 'Win', color: Color(0xFF218838)),
-            _FormDot(label: 'Draw', color: Color(0xFFFFC107)),
-            _FormDot(label: 'Lost', color: Color(0xFFD50000)),
-          ],
-        ),
-      ),
-    );
+  Color _positionColor(int rank, String description) {
+    if (description.contains('relegation')) return lostRed;
+    if (rank == 1 || rank == 3) return winGreen;
+    if (rank >= 4 && rank <= 10) return const Color(0xFFE0A800);
+    if (rank >= 11 && rank <= 20) return const Color(0xFF1976D2);
+    return Colors.grey;
   }
 
-  Widget _tableLegend() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          children: const [
-            _FormDot(label: '1st & 3rd: Green', color: Color(0xFF218838)),
-            _FormDot(label: '4th鈥�10th: Yellow', color: Color(0xFFFFD54F)),
-            _FormDot(label: '11th鈥�17th: Blue', color: Color(0xFF2879C7)),
-            _FormDot(label: '18th鈥�20th: Red', color: Color(0xFFD50000)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FormDot extends StatelessWidget {
-  const _FormDot({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _formDots(String form) {
+    final chars = form.split('').take(5).toList();
+    if (chars.isEmpty) return const Text('-');
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 9,
-          height: 9,
+      children: chars.map((value) {
+        final color = value == 'W' ? winGreen : value == 'D' ? drawGold : lostRed;
+        return Container(
+          width: 15,
+          height: 15,
+          margin: const EdgeInsets.only(right: 3),
+          alignment: Alignment.center,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 5),
-        Text(label, style: const TextStyle(fontSize: 11)),
-      ],
+          child: Text(value, style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold)),
+        );
+      }).toList(),
     );
+  }
+
+  String _statusShort(Map<String, dynamic> fixture) {
+    final info = fixture['fixture'];
+    if (info is Map && info['status'] is Map) {
+      return (info['status']['short'] ?? 'NS').toString();
+    }
+    return 'NS';
+  }
+
+  String _formatDate(String raw) {
+    if (raw.isEmpty) return '';
+    final parsed = DateTime.tryParse(raw)?.toLocal();
+    if (parsed == null) return raw;
+    final day = parsed.day.toString().padLeft(2, '0');
+    final month = parsed.month.toString().padLeft(2, '0');
+    final hour = parsed.hour.toString().padLeft(2, '0');
+    final minute = parsed.minute.toString().padLeft(2, '0');
+    return '$day/$month/${parsed.year}  $hour:$minute';
+  }
+
+  int _number(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }
 
-class _LeagueRow {
-  const _LeagueRow(this.position, this.team, this.played, this.points);
-
-  final int position;
-  final String team;
-  final int played;
-  final int points;
+extension FirstOrNullExtension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }
