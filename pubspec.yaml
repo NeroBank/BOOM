@@ -20,4 +20,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/icon/1793295048387.jpg
+  - assets/boom_logo.png
