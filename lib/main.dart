@@ -86,7 +86,7 @@ class FootballApi {
     } else if (date != null) {
       q['date'] = date;
     } else {
-      q['next'] = '20';
+      q['date'] = _date(DateTime.now());
     }
 
     final cacheKey = live != null
