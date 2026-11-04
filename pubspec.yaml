@@ -11,6 +11,8 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.2
+  supabase_flutter: ^2.10.3
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:
@@ -20,4 +22,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-  - assets/boom_logo.png
+    - assets/boom_logo.png
