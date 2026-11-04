@@ -1,3 +1,4 @@
+
 name: boomgratulations
 description: BOOMGRATULATIONS football fixtures, live scores, picks, history and Pro.
 publish_to: 'none'
@@ -17,6 +18,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
@@ -29,3 +31,10 @@ flutter:
           weight: 400
         - asset: assets/Montserrat-Bold.ttf
           weight: 700
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/boom_logo.png
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: assets/boom_logo.png
