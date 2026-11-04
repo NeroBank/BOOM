@@ -91,7 +91,7 @@ class FootballApi {
 
     final cacheKey = live != null
         ? 'boom_api_live_v1'
-        : 'boom_api_fixtures_v2_${q['date'] ?? 'next20'}';
+        : 'boom_api_fixtures_v3_${q['date'] ?? 'next20'}';
     final cacheAge = live != null ? _liveCacheAge : _fixturesCacheAge;
     final cached = await _readCache(cacheKey);
 
