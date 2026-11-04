@@ -331,6 +331,17 @@ class LocalStore {
   }
 }
 
+
+const boomCompetitions = <Map<String, dynamic>>[
+  {'id': 39, 'name': 'Premier League', 'country': 'England'},
+  {'id': 140, 'name': 'La Liga', 'country': 'Spain'},
+  {'id': 135, 'name': 'Serie A', 'country': 'Italy'},
+  {'id': 78, 'name': 'Bundesliga', 'country': 'Germany'},
+  {'id': 61, 'name': 'Ligue 1', 'country': 'France'},
+  {'id': 2, 'name': 'UEFA Champions League', 'country': 'Europe'},
+  {'id': 399, 'name': 'Nigeria Premier League', 'country': 'Nigeria'},
+];
+
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key, required this.onTheme});
   final ValueChanged<ThemeMode> onTheme;
@@ -346,6 +357,12 @@ class _HomeShellState extends State<HomeShell> {
   List<Map<String,dynamic>> history = [];
   List<Map<String,dynamic>> notices = [];
   bool notificationsEnabled = true;
+  int selectedLeagueId = 39;
+  int selectedSeason = 2026;
+  bool standingsLoading = false;
+  String? standingsError;
+  List<Map<String, dynamic>> standingsRows = [];
+
 
   @override
   void initState() {
@@ -374,6 +391,32 @@ class _HomeShellState extends State<HomeShell> {
       if (mounted) setState(() => loading = false);
     }
   }
+
+  Future<void> _loadStandings() async {
+    if (standingsLoading) return;
+    setState(() {
+      standingsLoading = true;
+      standingsError = null;
+    });
+
+    try {
+      // Only the currently selected competition is requested. FootballApi
+      // caches each league/season for six hours, so changing back to a
+      // previously loaded league does not create another API request.
+      final rows = await FootballApi().standings(selectedLeagueId, selectedSeason);
+      if (!mounted) return;
+      setState(() => standingsRows = rows);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          standingsError = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
+    } finally {
+      if (mounted) setState(() => standingsLoading = false);
+    }
+  }
+
   Future<void> _saveHistory(Map<String,dynamic> m) async {
     final id = ((m['fixture'] as Map?)?['id'] ?? '').toString();
     final teams = m['teams'] as Map? ?? {};
@@ -486,18 +529,387 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget _fixturesPage() => RefreshIndicator(
     onRefresh: _refresh,
-    child: ListView(padding: const EdgeInsets.all(14), children: [
-      Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(gradient: const LinearGradient(colors:[brandRed,Color(0xFF7F0000)]), borderRadius: BorderRadius.circular(18)), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
-        Text('YOUR FOOTBALL CENTRE', style: TextStyle(color:Colors.white70,letterSpacing:1.1,fontSize:10)),
-        SizedBox(height:8), Text('Football. Predictions. Results.', style:TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:21)),
-        SizedBox(height:6), Text('Fixtures 鈥� Live scores 鈥� Match history',style:TextStyle(color:Colors.white70,fontSize:11)),
-      ])),
-      const SizedBox(height:18),
-      _section('Upcoming & recent fixtures', 'Football data from API-Football'),
-      if (matches.isEmpty) _empty('No fixtures loaded yet', 'Pull down to refresh. If matches remain missing, check the API message above.')
-      else ...matches.map(_matchCard),
-    ]),
+    child: ListView(
+      padding: const EdgeInsets.all(14),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [brandRed, Color(0xFF7F0000)],
+            ),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'YOUR FOOTBALL CENTRE',
+                style: TextStyle(
+                  color: Colors.white70,
+                  letterSpacing: 1.1,
+                  fontSize: 10,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Football. Predictions. Results.',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 21,
+                ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Fixtures 鈥� Live scores 鈥� Match history',
+                style: TextStyle(color: Colors.white70, fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        _section(
+          'League tables',
+          'Select one competition and load its latest standings',
+        ),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButtonFormField<int>(
+                  value: selectedLeagueId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Competition',
+                    prefixIcon: Icon(Icons.emoji_events_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: boomCompetitions.map((competition) {
+                    return DropdownMenuItem<int>(
+                      value: competition['id'] as int,
+                      child: Text(
+                        '${competition['name']} (${competition['country']})',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: standingsLoading
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          setState(() {
+                            selectedLeagueId = value;
+                            standingsRows = [];
+                            standingsError = null;
+                          });
+                        },
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Season $selectedSeason 鈥� Table is loaded only when requested',
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: standingsLoading ? null : _loadStandings,
+                      icon: standingsLoading
+                          ? const SizedBox(
+                              width: 15,
+                              height: 15,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.table_chart_outlined, size: 17),
+                      label: Text(
+                        standingsLoading ? 'Loading' : 'Load table',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: brandRed,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        if (standingsError != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              'Table error: $standingsError',
+              style: const TextStyle(fontSize: 11),
+            ),
+          ),
+        ],
+
+        if (standingsRows.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _standingsTable(),
+        ] else if (!standingsLoading && standingsError == null) ...[
+          const SizedBox(height: 8),
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(14),
+              child: Text(
+                'Choose a competition and tap 鈥淟oad table鈥�. '
+                'Only that competition will be requested from API-Football.',
+                style: TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 18),
+        _section(
+          'Upcoming & recent fixtures',
+          'Football data from API-Football',
+        ),
+        if (matches.isEmpty)
+          _empty(
+            'No fixtures loaded yet',
+            'Pull down to refresh. If matches remain missing, check the API message above.',
+          )
+        else
+          ...matches.map(_matchCard),
+      ],
+    ),
   );
+
+  Widget _standingsTable() {
+    final competition = boomCompetitions.firstWhere(
+      (item) => item['id'] == selectedLeagueId,
+      orElse: () => {'name': 'Football', 'country': ''},
+    );
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.emoji_events, color: brandRed),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${competition['name']} 鈥� ${competition['country']}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                Text(
+                  '$selectedSeason',
+                  style: const TextStyle(color: Colors.grey, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columnSpacing: 18,
+              headingRowHeight: 42,
+              dataRowMinHeight: 58,
+              dataRowMaxHeight: 70,
+              columns: const [
+                DataColumn(label: Text('#')),
+                DataColumn(label: Text('TEAM')),
+                DataColumn(label: Text('MP')),
+                DataColumn(label: Text('W')),
+                DataColumn(label: Text('D')),
+                DataColumn(label: Text('L')),
+                DataColumn(label: Text('GD')),
+                DataColumn(label: Text('PTS')),
+                DataColumn(label: Text('FORM')),
+              ],
+              rows: standingsRows.map((row) {
+                final rank = _standingsInt(row['rank']);
+                final team = row['team'] as Map? ?? {};
+                final all = row['all'] as Map? ?? {};
+                final teamName = team['name']?.toString() ?? 'Team';
+                final played = _standingsInt(all['played']);
+                final wins = _standingsInt(all['win']);
+                final draws = _standingsInt(all['draw']);
+                final losses = _standingsInt(all['lose']);
+                final goalsDiff = _standingsInt(row['goalsDiff']);
+                final points = _standingsInt(row['points']);
+                final form = row['form']?.toString() ?? '';
+
+                return DataRow(
+                  cells: [
+                    DataCell(
+                      Text(
+                        '$rank',
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    DataCell(
+                      SizedBox(
+                        width: 190,
+                        child: Row(
+                          children: [
+                            _teamLogo(team['logo']?.toString()),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                teamName,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    DataCell(Text('$played')),
+                    DataCell(Text('$wins')),
+                    DataCell(Text('$draws')),
+                    DataCell(Text('$losses')),
+                    DataCell(
+                      Text(
+                        goalsDiff > 0 ? '+$goalsDiff' : '$goalsDiff',
+                        style: TextStyle(
+                          color: goalsDiff > 0
+                              ? Colors.green
+                              : goalsDiff < 0
+                                  ? Colors.red
+                                  : null,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        '$points',
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    DataCell(_formIndicators(form)),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(14, 4, 14, 12),
+            child: Text(
+              'Form uses API-Football鈥檚 standings form field when supplied. '
+              'W = win, D = draw, L = loss.',
+              style: TextStyle(color: Colors.grey, fontSize: 9),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _standingsInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  Widget _teamLogo(String? url) {
+    if (url == null || url.isEmpty) {
+      return const SizedBox(
+        width: 25,
+        height: 25,
+        child: Icon(Icons.shield_outlined, size: 22, color: Colors.grey),
+      );
+    }
+    return Image.network(
+      url,
+      width: 25,
+      height: 25,
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => const SizedBox(
+        width: 25,
+        height: 25,
+        child: Icon(Icons.shield_outlined, size: 22, color: Colors.grey),
+      ),
+    );
+  }
+
+  Widget _formIndicators(String form) {
+    final chars = form
+        .toUpperCase()
+        .split('')
+        .where((c) => c == 'W' || c == 'D' || c == 'L')
+        .toList();
+
+    final lastFive = chars.length > 5
+        ? chars.sublist(chars.length - 5)
+        : chars;
+
+    if (lastFive.isEmpty) {
+      return const Text('鈥�', style: TextStyle(color: Colors.grey));
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: lastFive.map((result) {
+        final Color color;
+        final String label;
+        if (result == 'W') {
+          color = Colors.green;
+          label = 'W';
+        } else if (result == 'D') {
+          color = Colors.amber;
+          label = 'D';
+        } else {
+          color = Colors.red;
+          label = 'L';
+        }
+
+        return Container(
+          width: 21,
+          height: 21,
+          margin: const EdgeInsets.only(right: 3),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color.withOpacity(.18),
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: color.withOpacity(.65)),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _livePage() => RefreshIndicator(
     onRefresh: _refresh,
     child: ListView(padding: const EdgeInsets.all(14), children: [
@@ -566,21 +978,120 @@ class _HomeShellState extends State<HomeShell> {
     return '$day/$month/${parsed.year} $hour:$minute';
   }
   Widget _matchCard(Map<String,dynamic> m) {
-    final f=m['fixture'] as Map? ?? {}; final teams=m['teams'] as Map? ?? {};
-    final h=teams['home'] as Map? ?? {}; final a=teams['away'] as Map? ?? {};
-    final goals=m['goals'] as Map? ?? {}; final league=m['league'] as Map? ?? {};
-    final status=f['status'] as Map? ?? {};
-    final score=(goals['home']==null && goals['away']==null)?'VS':'${goals['home']} - ${goals['away']}';
-    final short=(status['short']??'NS').toString();
-    return Card(margin:const EdgeInsets.only(bottom:9),child:Padding(padding:const EdgeInsets.all(12),child:Column(children:[
-      Row(children:[Expanded(child:Text('${league['name']??'Football'} 鈥� ${league['country']??''}',style:const TextStyle(color:Colors.grey,fontSize:10))),Text(short,style:const TextStyle(color:brandRed,fontWeight:FontWeight.bold,fontSize:11))]),
-      const SizedBox(height:10),
-      Row(children:[Expanded(child:Text(h['name']??'Home',style:const TextStyle(fontWeight:FontWeight.bold),maxLines:2)),Text(score,style:const TextStyle(fontWeight:FontWeight.w900)),Expanded(child:Text(a['name']??'Away',textAlign:TextAlign.end,style:const TextStyle(fontWeight:FontWeight.bold),maxLines:2))]),
-      const SizedBox(height:7),
-      Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
-        Text(_formatKickoff(f['date']?.toString() ?? ''),style:const TextStyle(color:Colors.grey,fontSize:10)),
-        TextButton.icon(onPressed:()=>_saveHistory(m),icon:const Icon(Icons.bookmark_add_outlined,size:16),label:const Text('Save to History')),
-      ]),
-    ])));
+    final f = m['fixture'] as Map? ?? {};
+    final teams = m['teams'] as Map? ?? {};
+    final h = teams['home'] as Map? ?? {};
+    final a = teams['away'] as Map? ?? {};
+    final goals = m['goals'] as Map? ?? {};
+    final league = m['league'] as Map? ?? {};
+    final status = f['status'] as Map? ?? {};
+    final venue = f['venue'] as Map? ?? {};
+
+    final score = (goals['home'] == null && goals['away'] == null)
+        ? 'VS'
+        : '${goals['home']} - ${goals['away']}';
+    final short = (status['short'] ?? 'NS').toString();
+    final venueName = venue['name']?.toString().trim() ?? '';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 9),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${league['name'] ?? 'Football'} 鈥� ${league['country'] ?? ''}',
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+                Text(
+                  short,
+                  style: const TextStyle(
+                    color: brandRed,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    h['name'] ?? 'Home',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    maxLines: 2,
+                  ),
+                ),
+                Text(
+                  score,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                Expanded(
+                  child: Text(
+                    a['name'] ?? 'Away',
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    maxLines: 2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+            if (venueName.isNotEmpty) ...[
+              Row(
+                children: [
+                  const Icon(
+                    Icons.stadium_outlined,
+                    size: 14,
+                    color: Colors.grey,
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      venueName,
+                      style: const TextStyle(
+                        color: Colors.grey,
+                        fontSize: 10,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+            ],
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _formatKickoff(f['date']?.toString() ?? ''),
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 10,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _saveHistory(m),
+                  icon: const Icon(
+                    Icons.bookmark_add_outlined,
+                    size: 16,
+                  ),
+                  label: const Text('Save to History'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
