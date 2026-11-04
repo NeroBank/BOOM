@@ -315,6 +315,7 @@ class _CachedFixtures {
 class LocalStore {
   static const historyKey = 'boom_match_history_v1';
   static const noticeKey = 'boom_notifications_v1';
+  static const notificationSoundKey = 'boom_notification_sound_v1';
   static Future<List<Map<String,dynamic>>> read(String key) async {
     final p = await SharedPreferences.getInstance();
     final raw = p.getString(key);
@@ -357,6 +358,7 @@ class _HomeShellState extends State<HomeShell> {
   List<Map<String,dynamic>> history = [];
   List<Map<String,dynamic>> notices = [];
   bool notificationsEnabled = true;
+  bool notificationSoundEnabled = true;
   int selectedLeagueId = 39;
   int selectedSeason = 2026;
   bool standingsLoading = false;
@@ -373,7 +375,26 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> _loadLocal() async {
     final h = await LocalStore.read(LocalStore.historyKey);
     final n = await LocalStore.read(LocalStore.noticeKey);
-    if (mounted) setState(() { history = h; notices = n; });
+    final prefs = await SharedPreferences.getInstance();
+    final sound = prefs.getBool(LocalStore.notificationSoundKey) ?? true;
+    if (mounted) {
+      setState(() {
+        history = h;
+        notices = n;
+        notificationSoundEnabled = sound;
+      });
+    }
+  }
+
+  Future<void> _setNotificationSound(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(LocalStore.notificationSoundKey, value);
+    if (!mounted) return;
+    setState(() => notificationSoundEnabled = value);
+    _addNotice(
+      'Notification sound',
+      value ? 'Notification sound is ON.' : 'Notification sound is OFF.',
+    );
   }
   Future<void> _refresh() async {
     if (loading) return;
@@ -732,18 +753,13 @@ class _HomeShellState extends State<HomeShell> {
             child: DataTable(
               columnSpacing: 18,
               headingRowHeight: 42,
-              dataRowMinHeight: 58,
-              dataRowMaxHeight: 70,
+              dataRowMinHeight: 82,
+              dataRowMaxHeight: 92,
               columns: const [
-                DataColumn(label: Text('#')),
-                DataColumn(label: Text('TEAM')),
+                DataColumn(label: Text('TEAM / FORM')),
                 DataColumn(label: Text('MP')),
-                DataColumn(label: Text('W')),
-                DataColumn(label: Text('D')),
-                DataColumn(label: Text('L')),
                 DataColumn(label: Text('GD')),
                 DataColumn(label: Text('PTS')),
-                DataColumn(label: Text('FORM')),
               ],
               rows: standingsRows.map((row) {
                 final rank = _standingsInt(row['rank']);
@@ -761,37 +777,56 @@ class _HomeShellState extends State<HomeShell> {
                 return DataRow(
                   cells: [
                     DataCell(
-                      Text(
-                        '$rank',
-                        style: const TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                    ),
-                    DataCell(
                       SizedBox(
-                        width: 190,
-                        child: Row(
+                        width: 245,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _teamLogo(team['logo']?.toString()),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                teamName,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 11,
+                            Row(
+                              children: [
+                                _teamLogo(team['logo']?.toString()),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    teamName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 12,
+                                    ),
+                                  ),
                                 ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Win $wins   Draw $draws   Lost $losses',
+                              style: const TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.grey,
                               ),
                             ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Position $rank',
+                              style: const TextStyle(
+                                color: brandRed,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            if (form.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              _formIndicators(form),
+                            ],
                           ],
                         ),
                       ),
                     ),
                     DataCell(Text('$played')),
-                    DataCell(Text('$wins')),
-                    DataCell(Text('$draws')),
-                    DataCell(Text('$losses')),
                     DataCell(
                       Text(
                         goalsDiff > 0 ? '+$goalsDiff' : '$goalsDiff',
@@ -811,7 +846,6 @@ class _HomeShellState extends State<HomeShell> {
                         style: const TextStyle(fontWeight: FontWeight.w900),
                       ),
                     ),
-                    DataCell(_formIndicators(form)),
                   ],
                 );
               }).toList(),
@@ -820,8 +854,7 @@ class _HomeShellState extends State<HomeShell> {
           const Padding(
             padding: EdgeInsets.fromLTRB(14, 4, 14, 12),
             child: Text(
-              'Form uses API-Football鈥檚 standings form field when supplied. '
-              'W = win, D = draw, L = loss.',
+              'W = Win 鈥� D = Draw 鈥� L = Lost. Position is shown in red beneath each team form. Last-five form is shown separately below when supplied by API-Football.',
               style: TextStyle(color: Colors.grey, fontSize: 9),
             ),
           ),
@@ -936,7 +969,36 @@ class _HomeShellState extends State<HomeShell> {
   ]);
   Widget _notificationsPage() => ListView(padding: const EdgeInsets.all(14), children: [
     _section('Notifications', 'BOOM app updates and saved alerts'),
-    SwitchListTile(value: notificationsEnabled, onChanged: (v) { setState(()=>notificationsEnabled=v); _addNotice('Notification setting changed', v ? 'In-app alerts enabled.' : 'In-app alerts paused.'); }, title: const Text('In-app notifications'), subtitle: const Text('Controls alerts shown inside this app. Push notifications require a later Firebase setup.')),
+    SwitchListTile(
+      secondary: Icon(
+        notificationsEnabled ? Icons.notifications_active : Icons.notifications_off,
+        color: brandRed,
+      ),
+      value: notificationsEnabled,
+      onChanged: (v) {
+        setState(() => notificationsEnabled = v);
+        _addNotice(
+          'Notification setting changed',
+          v ? 'In-app alerts enabled.' : 'In-app alerts paused.',
+        );
+      },
+      title: const Text('In-app notifications'),
+      subtitle: const Text('Controls alerts shown inside this app. Push notifications require a later Firebase setup.'),
+    ),
+    SwitchListTile(
+      secondary: Icon(
+        notificationSoundEnabled ? Icons.volume_up : Icons.volume_off,
+        color: notificationSoundEnabled ? brandRed : Colors.grey,
+      ),
+      value: notificationSoundEnabled,
+      onChanged: _setNotificationSound,
+      title: Text(notificationSoundEnabled ? 'Sound ON' : 'Sound OFF'),
+      subtitle: Text(
+        notificationSoundEnabled
+            ? 'Notification sound is enabled.'
+            : 'Notification sound is disabled.',
+      ),
+    ),
     if (notices.isEmpty) _empty('No notifications yet', 'Important in-app messages will appear here.')
     else ...notices.map((n)=>Card(child:ListTile(leading:const Icon(Icons.notifications_active_outlined,color:brandRed),title:Text(n['title']??''),subtitle:Text(n['message']??'')))),
     TextButton(onPressed:() async { notices.clear(); await LocalStore.write(LocalStore.noticeKey,notices); setState((){}); }, child:const Text('Clear notifications')),
