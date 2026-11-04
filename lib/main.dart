@@ -60,31 +60,154 @@ class _BoomAppState extends State<BoomApp> {
 }
 
 class FootballApi {
+  // API-Football's free tier can be very restrictive. Keep requests spaced,
+  // reuse saved responses, and avoid duplicate requests during refreshes.
+  static const Duration _fixturesCacheAge = Duration(minutes: 10);
+  static const Duration _liveCacheAge = Duration(minutes: 1);
+  static const Duration _minimumRequestGap = Duration(seconds: 8);
+  static const Duration _rateLimitCooldown = Duration(minutes: 1);
+
+  static final Map<String, Future<List<Map<String, dynamic>>>> _inFlight = {};
+  static Future<void> _requestQueue = Future<void>.value();
+  static DateTime? _lastRequestAt;
+  static DateTime? _rateLimitedUntil;
+
   Future<List<Map<String, dynamic>>> fixtures({String? live, String? date}) async {
-    if (apiKey.isEmpty) throw Exception('Football API key is not configured in this build.');
-    final q = <String,String>{};
-    if (live != null) { q['live'] = live; } 
-    else if (date != null) { q['date'] = date; }
-    else {
-      final now = DateTime.now();
-      q['from'] = _date(now);
-      q['to'] = _date(now.add(const Duration(days: 3)));
+    if (apiKey.isEmpty) {
+      throw Exception('Football API key is not configured in this build.');
     }
-    final uri = Uri.parse('$apiBase/fixtures').replace(queryParameters: q);
-    final response = await http.get(uri, headers: {'x-apisports-key': apiKey})
-        .timeout(const Duration(seconds: 25));
-    if (response.statusCode != 200) {
-      throw Exception('Football service returned HTTP ${response.statusCode}.');
+
+    // Use API-Football's documented `next` filter instead of `from`/`to`.
+    // Some API responses reject date ranges with a validation error. `next`
+    // asks for the next 20 scheduled fixtures without a date-range pair.
+    final q = <String, String>{'timezone': 'Africa/Lagos'};
+    if (live != null) {
+      q['live'] = live;
+    } else if (date != null) {
+      q['date'] = date;
+    } else {
+      q['next'] = '20';
     }
-    final body = jsonDecode(response.body);
-    if (body is! Map) throw Exception('Unexpected football service response.');
-    final errors = body['errors'];
-    if (errors is Map && errors.isNotEmpty) throw Exception(errors.values.join(', '));
-    final rows = body['response'];
-    if (rows is! List) return [];
-    return rows.whereType<Map>().map((e) => Map<String,dynamic>.from(e)).toList();
+
+    final cacheKey = live != null
+        ? 'boom_api_live_v1'
+        : 'boom_api_fixtures_v2_${q['date'] ?? 'next20'}';
+    final cacheAge = live != null ? _liveCacheAge : _fixturesCacheAge;
+    final cached = await _readCache(cacheKey);
+
+    if (cached != null && DateTime.now().difference(cached.savedAt) < cacheAge) {
+      return cached.rows;
+    }
+
+    final existing = _inFlight[cacheKey];
+    if (existing != null) return existing;
+
+    if (_rateLimitedUntil != null && DateTime.now().isBefore(_rateLimitedUntil!)) {
+      if (cached != null) return cached.rows;
+      throw Exception('Football API is cooling down after a rate limit. Please try again shortly.');
+    }
+
+    final request = _fetchAndCache(cacheKey, q, cached);
+    _inFlight[cacheKey] = request;
+    try {
+      return await request;
+    } finally {
+      _inFlight.remove(cacheKey);
+    }
   }
-  String _date(DateTime d) => '${d.year.toString().padLeft(4,'0')}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
+
+  Future<List<Map<String, dynamic>>> _fetchAndCache(
+    String cacheKey,
+    Map<String, String> query,
+    _CachedFixtures? staleCache,
+  ) async {
+    try {
+      final uri = Uri.parse('$apiBase/fixtures').replace(queryParameters: query);
+      final response = await _queueRequest(() => http.get(
+        uri,
+        headers: {'x-apisports-key': apiKey},
+      ).timeout(const Duration(seconds: 25)));
+
+      if (response.statusCode == 429) {
+        _rateLimitedUntil = DateTime.now().add(_rateLimitCooldown);
+        throw Exception('Football API rate limit reached. BOOM is using saved results and will retry shortly.');
+      }
+      if (response.statusCode != 200) {
+        throw Exception('Football service returned HTTP ${response.statusCode}.');
+      }
+
+      final body = jsonDecode(response.body);
+      if (body is! Map) throw Exception('Unexpected football service response.');
+      final errors = body['errors'];
+      if (errors is Map && errors.isNotEmpty) {
+        final message = errors.values.join(', ');
+        if (message.toLowerCase().contains('rate limit') || message.toLowerCase().contains('too many requests')) {
+          _rateLimitedUntil = DateTime.now().add(_rateLimitCooldown);
+        }
+        throw Exception(message);
+      }
+
+      final rows = body['response'];
+      final result = rows is List
+          ? rows.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+          : <Map<String, dynamic>>[];
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(cacheKey, jsonEncode({
+        'savedAt': DateTime.now().toIso8601String(),
+        'rows': result,
+      }));
+      _rateLimitedUntil = null;
+      return result;
+    } catch (_) {
+      if (staleCache != null) return staleCache.rows;
+      rethrow;
+    }
+  }
+
+  Future<T> _queueRequest<T>(Future<T> Function() action) {
+    final task = _requestQueue.then((_) async {
+      final previous = _lastRequestAt;
+      if (previous != null) {
+        final elapsed = DateTime.now().difference(previous);
+        final wait = _minimumRequestGap - elapsed;
+        if (wait > Duration.zero) await Future<void>.delayed(wait);
+      }
+      _lastRequestAt = DateTime.now();
+      return action();
+    });
+    _requestQueue = task.then<void>((_) {}, onError: (Object _) {});
+    return task;
+  }
+
+  Future<_CachedFixtures?> _readCache(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(key);
+    if (raw == null) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map || decoded['rows'] is! List) return null;
+      final savedAt = DateTime.tryParse(decoded['savedAt']?.toString() ?? '');
+      if (savedAt == null) return null;
+      final rows = (decoded['rows'] as List)
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      return _CachedFixtures(savedAt, rows);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _date(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+}
+
+class _CachedFixtures {
+  const _CachedFixtures(this.savedAt, this.rows);
+  final DateTime savedAt;
+  final List<Map<String, dynamic>> rows;
 }
 
 class LocalStore {
@@ -134,6 +257,7 @@ class _HomeShellState extends State<HomeShell> {
     if (mounted) setState(() { history = h; notices = n; });
   }
   Future<void> _refresh() async {
+    if (loading) return;
     setState(() { loading = true; error = null; });
     try {
       final results = await Future.wait([
@@ -208,10 +332,43 @@ class _HomeShellState extends State<HomeShell> {
         if (error != null) Container(width: double.infinity, padding: const EdgeInsets.all(10), color: Colors.orange.withOpacity(.12), child: Text('Showing saved/demo content. $error', style: const TextStyle(fontSize: 11))),
         Expanded(child: pages[tab]),
       ]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: tab,
-        onDestinationSelected: (v) => setState(() => tab = v),
-        destinations: List.generate(7, (i) => NavigationDestination(icon: Icon(icons[i]), label: labels[i])),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 64,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(7, (i) {
+                final selected = tab == i;
+                return SizedBox(
+                  width: 70,
+                  child: InkWell(
+                    onTap: () => setState(() => tab = i),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(icons[i], size: 22, color: selected ? brandRed : Colors.grey),
+                        const SizedBox(height: 3),
+                        Text(
+                          labels[i],
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.visible,
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                            color: selected ? brandRed : Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -222,11 +379,11 @@ class _HomeShellState extends State<HomeShell> {
       Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(gradient: const LinearGradient(colors:[brandRed,Color(0xFF7F0000)]), borderRadius: BorderRadius.circular(18)), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
         Text('YOUR FOOTBALL CENTRE', style: TextStyle(color:Colors.white70,letterSpacing:1.1,fontSize:10)),
         SizedBox(height:8), Text('Football. Predictions. Results.', style:TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:21)),
-        SizedBox(height:6), Text('Fixtures • Live scores • Match history',style:TextStyle(color:Colors.white70,fontSize:11)),
+        SizedBox(height:6), Text('Fixtures 鈥� Live scores 鈥� Match history',style:TextStyle(color:Colors.white70,fontSize:11)),
       ])),
       const SizedBox(height:18),
       _section('Upcoming & recent fixtures', 'Football data from API-Football'),
-      if (matches.isEmpty) _empty('No fixtures loaded yet', 'Refresh when your football API key is configured.')
+      if (matches.isEmpty) _empty('No fixtures loaded yet', 'Pull down to refresh. If matches remain missing, check the API message above.')
       else ...matches.map(_matchCard),
     ]),
   );
@@ -252,7 +409,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget _historyPage() => ListView(padding: const EdgeInsets.all(14), children: [
     _section('Match History', 'Matches you chose to save on this device'),
     if (history.isEmpty) _empty('Your history is empty', 'Open a match and tap Save to History to keep it here.')
-    else ...history.map((m) => Card(child: ListTile(leading: const Icon(Icons.history,color:brandRed), title: Text('${m['home']} vs ${m['away']}'), subtitle: Text('${m['league']} • ${m['score']}'), trailing: IconButton(icon:const Icon(Icons.delete_outline),onPressed:() async { history.remove(m); await LocalStore.write(LocalStore.historyKey,history); setState((){}); })))),
+    else ...history.map((m) => Card(child: ListTile(leading: const Icon(Icons.history,color:brandRed), title: Text('${m['home']} vs ${m['away']}'), subtitle: Text('${m['league']} 鈥� ${m['score']}'), trailing: IconButton(icon:const Icon(Icons.delete_outline),onPressed:() async { history.remove(m); await LocalStore.write(LocalStore.historyKey,history); setState((){}); })))),
   ]);
   Widget _notificationsPage() => ListView(padding: const EdgeInsets.all(14), children: [
     _section('Notifications', 'BOOM app updates and saved alerts'),
@@ -266,7 +423,7 @@ class _HomeShellState extends State<HomeShell> {
     Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       const Icon(Icons.workspace_premium,color:brandRed,size:42),
       const SizedBox(height:10), const Text('BOOM PRO',style:TextStyle(fontSize:22,fontWeight:FontWeight.w900)),
-      const Text('₦2,000 / month',style:TextStyle(fontSize:19,fontWeight:FontWeight.bold,color:brandRed)),
+      const Text('鈧�2,000 / month',style:TextStyle(fontSize:19,fontWeight:FontWeight.bold,color:brandRed)),
       const SizedBox(height:8), const Text('Existing Paystack plan reference: PLN_dx1vkqqoydbnsqe'),
       const SizedBox(height:8), const Text('Checkout and subscription verification must be reconnected to the existing secure Supabase Edge Function before payments can be accepted. No payment is taken in this upgrade preview.'),
       const SizedBox(height:12), const Chip(label:Text('Payment connection pending verification')),
@@ -305,7 +462,7 @@ class _HomeShellState extends State<HomeShell> {
     final score=(goals['home']==null && goals['away']==null)?'VS':'${goals['home']} - ${goals['away']}';
     final short=(status['short']??'NS').toString();
     return Card(margin:const EdgeInsets.only(bottom:9),child:Padding(padding:const EdgeInsets.all(12),child:Column(children:[
-      Row(children:[Expanded(child:Text('${league['name']??'Football'} • ${league['country']??''}',style:const TextStyle(color:Colors.grey,fontSize:10))),Text(short,style:const TextStyle(color:brandRed,fontWeight:FontWeight.bold,fontSize:11))]),
+      Row(children:[Expanded(child:Text('${league['name']??'Football'} 鈥� ${league['country']??''}',style:const TextStyle(color:Colors.grey,fontSize:10))),Text(short,style:const TextStyle(color:brandRed,fontWeight:FontWeight.bold,fontSize:11))]),
       const SizedBox(height:10),
       Row(children:[Expanded(child:Text(h['name']??'Home',style:const TextStyle(fontWeight:FontWeight.bold),maxLines:2)),Text(score,style:const TextStyle(fontWeight:FontWeight.w900)),Expanded(child:Text(a['name']??'Away',textAlign:TextAlign.end,style:const TextStyle(fontWeight:FontWeight.bold),maxLines:2))]),
       const SizedBox(height:7),
