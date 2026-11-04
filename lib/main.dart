@@ -72,6 +72,108 @@ class FootballApi {
   static DateTime? _lastRequestAt;
   static DateTime? _rateLimitedUntil;
 
+    Future<List<Map<String, dynamic>>> standings(int leagueId, int season) async {
+    if (apiKey.isEmpty) {
+      throw Exception('Football API key is not configured.');
+    }
+
+    final cacheKey = 'boom_standings_${leagueId}_$season';
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(cacheKey);
+
+    List<Map<String, dynamic>>? saved;
+    DateTime? savedAt;
+
+    if (raw != null) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map && decoded['rows'] is List) {
+          saved = (decoded['rows'] as List)
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          savedAt = DateTime.tryParse(decoded['savedAt']?.toString() ?? '');
+        }
+      } catch (_) {}
+    }
+
+    if (saved != null &&
+        savedAt != null &&
+        DateTime.now().difference(savedAt) < const Duration(hours: 6)) {
+      return saved;
+    }
+
+    if (_rateLimitedUntil != null &&
+        DateTime.now().isBefore(_rateLimitedUntil!)) {
+      if (saved != null) return saved;
+      throw Exception('Football API is cooling down. Try again shortly.');
+    }
+
+    try {
+      final uri = Uri.parse('$apiBase/standings').replace(
+        queryParameters: {
+          'league': leagueId.toString(),
+          'season': season.toString(),
+        },
+      );
+
+      final response = await _queueRequest(() => http.get(
+            uri,
+            headers: {'x-apisports-key': apiKey},
+          ).timeout(const Duration(seconds: 25)));
+
+      if (response.statusCode == 429) {
+        _rateLimitedUntil = DateTime.now().add(_rateLimitCooldown);
+        throw Exception('Football API rate limit reached.');
+      }
+
+      if (response.statusCode != 200) {
+        throw Exception('Standings service returned HTTP ${response.statusCode}.');
+      }
+
+      final body = jsonDecode(response.body);
+      if (body is! Map) throw Exception('Unexpected standings response.');
+
+      final errors = body['errors'];
+      if (errors is Map && errors.isNotEmpty) {
+        throw Exception(errors.values.join(', '));
+      }
+
+      final result = <Map<String, dynamic>>[];
+      final responses = body['response'];
+
+      if (responses is List && responses.isNotEmpty) {
+        final league = responses.first is Map
+            ? (responses.first as Map)['league'] as Map?
+            : null;
+
+        final groups = league?['standings'];
+
+        if (groups is List) {
+          for (final group in groups) {
+            if (group is List) {
+              for (final row in group) {
+                if (row is Map) {
+                  result.add(Map<String, dynamic>.from(row));
+                }
+              }
+            }
+          }
+        }
+      }
+
+      await prefs.setString(cacheKey, jsonEncode({
+        'savedAt': DateTime.now().toIso8601String(),
+        'rows': result,
+      }));
+
+      _rateLimitedUntil = null;
+      return result;
+    } catch (_) {
+      if (saved != null) return saved;
+      rethrow;
+    }
+  }
   Future<List<Map<String, dynamic>>> fixtures({String? live, String? date}) async {
     if (apiKey.isEmpty) {
       throw Exception('Football API key is not configured in this build.');
