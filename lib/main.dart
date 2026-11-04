@@ -328,47 +328,56 @@ class _HomeShellState extends State<HomeShell> {
         ],
       ),
       body: Column(children: [
+        // The two secondary destinations stay at the top, as requested.
+        Material(
+          color: Theme.of(context).cardColor,
+          child: Row(children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => setState(() => tab = 5),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 8),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.workspace_premium, size: 19, color: tab == 5 ? brandRed : Colors.grey),
+                    const SizedBox(width: 7),
+                    Flexible(child: Text('Subscribe to Pro', maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, fontWeight: tab == 5 ? FontWeight.w800 : FontWeight.w600,
+                        color: tab == 5 ? brandRed : null))),
+                  ]),
+                ),
+              ),
+            ),
+            Container(width: 1, height: 26, color: Colors.grey.withOpacity(.35)),
+            Expanded(
+              child: InkWell(
+                onTap: () => setState(() => tab = 4),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 8),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.notifications_outlined, size: 19, color: tab == 4 ? brandRed : Colors.grey),
+                    const SizedBox(width: 7),
+                    Text('Alerts', style: TextStyle(fontSize: 12,
+                      fontWeight: tab == 4 ? FontWeight.w800 : FontWeight.w600,
+                      color: tab == 4 ? brandRed : null)),
+                  ]),
+                ),
+              ),
+            ),
+          ]),
+        ),
         if (loading) const LinearProgressIndicator(minHeight: 2),
         if (error != null) Container(width: double.infinity, padding: const EdgeInsets.all(10), color: Colors.orange.withOpacity(.12), child: Text('Showing saved/demo content. $error', style: const TextStyle(fontSize: 11))),
         Expanded(child: pages[tab]),
       ]),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 64,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: List.generate(7, (i) {
-                final selected = tab == i;
-                return SizedBox(
-                  width: 70,
-                  child: InkWell(
-                    onTap: () => setState(() => tab = i),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(icons[i], size: 22, color: selected ? brandRed : Colors.grey),
-                        const SizedBox(height: 3),
-                        Text(
-                          labels[i],
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.visible,
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
-                            color: selected ? brandRed : Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ),
-        ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: const [0, 1, 2, 6].indexOf(tab) < 0 ? 0 : const [0, 1, 2, 6].indexOf(tab),
+        onDestinationSelected: (index) => setState(() => tab = const [0, 1, 2, 6][index]),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.sensors), label: 'Live'),
+          NavigationDestination(icon: Icon(Icons.auto_awesome), label: 'Pick'),
+          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Account'),
+        ],
       ),
     );
   }
