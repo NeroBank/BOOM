@@ -308,31 +308,94 @@ class FootballApi {
     if (apiKey.trim().isEmpty) {
       throw Exception('API-Football key is missing. Add API_FOOTBALL_KEY in GitHub Secrets.');
     }
-    final uri = Uri.parse('$apiBase/$path').replace(
-      queryParameters: query,
+
+    final sortedQuery = Map<String, String>.fromEntries(
+      query.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
     );
-    final response = await _queueRequest(() => http.get(
-      uri,
-      headers: {'x-apisports-key': apiKey},
-    ).timeout(const Duration(seconds: 25)));
-    if (response.statusCode == 429) {
-      _rateLimitedUntil = DateTime.now().add(_rateLimitCooldown);
-      throw Exception('API-Football rate limit reached. Please wait and retry.');
+    final cacheKey = 'boom_endpoint_v2_${path}_${jsonEncode(sortedQuery)}';
+    final cacheAge = path == 'fixtures/statistics'
+        ? const Duration(minutes: 3)
+        : const Duration(hours: 12);
+    final prefs = await SharedPreferences.getInstance();
+
+    List<Map<String, dynamic>>? staleRows;
+    final cachedRaw = prefs.getString(cacheKey);
+    if (cachedRaw != null) {
+      try {
+        final cached = jsonDecode(cachedRaw);
+        if (cached is Map && cached['rows'] is List) {
+          staleRows = (cached['rows'] as List)
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList();
+          final savedAt = DateTime.tryParse(cached['savedAt']?.toString() ?? '');
+          if (savedAt != null &&
+              DateTime.now().difference(savedAt) < cacheAge) {
+            return staleRows;
+          }
+        }
+      } catch (_) {
+        staleRows = null;
+      }
     }
-    if (response.statusCode != 200) {
-      throw Exception('$path returned HTTP ${response.statusCode}.');
+
+    if (_rateLimitedUntil != null &&
+        DateTime.now().isBefore(_rateLimitedUntil!)) {
+      if (staleRows != null && staleRows.isNotEmpty) return staleRows;
+      throw Exception('API-Football rate limit reached. Try again after the cooldown.');
     }
-    final body = jsonDecode(response.body);
-    if (body is! Map) throw Exception('Unexpected API response for $path.');
-    final errors = body['errors'];
-    if (errors is Map && errors.isNotEmpty) {
-      throw Exception(errors.values.join(', '));
+
+    try {
+      final uri = Uri.parse('$apiBase/$path').replace(
+        queryParameters: sortedQuery,
+      );
+      final response = await _queueRequest(() => http.get(
+        uri,
+        headers: {'x-apisports-key': apiKey},
+      ).timeout(const Duration(seconds: 25)));
+
+      if (response.statusCode == 429) {
+        _rateLimitedUntil = DateTime.now().add(_rateLimitCooldown);
+        throw Exception('API-Football rate limit reached. Please wait and retry.');
+      }
+      if (response.statusCode != 200) {
+        throw Exception('$path returned HTTP ${response.statusCode}.');
+      }
+
+      final body = jsonDecode(response.body);
+      if (body is! Map) throw Exception('Unexpected API response for $path.');
+      final errors = body['errors'];
+      if (errors is Map && errors.isNotEmpty) {
+        final message = errors.values.map((value) => value.toString()).join(', ');
+        if (message.toLowerCase().contains('rate limit') ||
+            message.toLowerCase().contains('too many requests')) {
+          _rateLimitedUntil = DateTime.now().add(_rateLimitCooldown);
+        }
+        throw Exception(message);
+      }
+
+      final rows = body['response'];
+      final result = rows is List
+          ? rows.whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList()
+          : <Map<String, dynamic>>[];
+
+      // Do not replace useful saved data with an empty response.
+      if (result.isNotEmpty) {
+        await prefs.setString(cacheKey, jsonEncode({
+          'savedAt': DateTime.now().toIso8601String(),
+          'rows': result,
+        }));
+      } else if (staleRows != null && staleRows.isNotEmpty) {
+        return staleRows;
+      }
+      _rateLimitedUntil = null;
+      return result;
+    } catch (_) {
+      if (staleRows != null && staleRows.isNotEmpty) return staleRows;
+      rethrow;
     }
-    final rows = body['response'];
-    if (rows is! List) return <Map<String, dynamic>>[];
-    return rows.whereType<Map>()
-        .map((row) => Map<String, dynamic>.from(row))
-        .toList();
   }
 
   String _date(DateTime d) =>
@@ -747,7 +810,7 @@ class _HomeShellState extends State<HomeShell> {
             child: Padding(
               padding: EdgeInsets.all(14),
               child: Text(
-                'Choose a competition and tap 鈥淟oad table鈥�. '
+                'Choose a competition and tap 'Load table'. '
                 'Only that competition will be requested from API-Football.',
                 style: TextStyle(fontSize: 11, color: Colors.grey),
               ),
@@ -1039,8 +1102,8 @@ class _HomeShellState extends State<HomeShell> {
         }
 
         return Container(
-          width: 21,
-          height: 21,
+          width: 17,
+          height: 17,
           margin: const EdgeInsets.only(right: 3),
           alignment: Alignment.center,
           decoration: BoxDecoration(
@@ -1324,50 +1387,75 @@ class _MatchInsightsPageState extends State<MatchInsightsPage> {
     final homeId = _home?['id']?.toString();
     final awayId = _away?['id']?.toString();
     final fixtureId = _fixture?['id']?.toString();
-    final season = _league?['season']?.toString() ??
-        DateTime.now().year.toString();
+
     if (homeId == null || awayId == null) {
+      if (!mounted) return;
       setState(() {
         loading = false;
         error = 'Team identifiers are missing from this fixture.';
       });
       return;
     }
-    try {
-      final api = FootballApi();
-      final results = await Future.wait([
-        api.endpoint('fixtures', {
-          'team': homeId, 'last': '5', 'season': season,
-          'timezone': 'Africa/Lagos',
-        }),
-        api.endpoint('fixtures', {
-          'team': awayId, 'last': '5', 'season': season,
-          'timezone': 'Africa/Lagos',
-        }),
-        api.endpoint('fixtures/headtohead', {
-          'h2h': '$homeId-$awayId', 'last': '5',
-          'timezone': 'Africa/Lagos',
-        }),
-        if (fixtureId != null)
-          api.endpoint('fixtures/statistics', {'fixture': fixtureId})
-        else
-          Future.value(<Map<String, dynamic>>[]),
-      ]);
-      if (!mounted) return;
-      setState(() {
-        homeRecent = results[0];
-        awayRecent = results[1];
-        h2h = results[2];
-        statistics = results[3];
-        loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        error = e.toString().replaceFirst('Exception: ', '');
-        loading = false;
-      });
+
+    setState(() {
+      loading = true;
+      error = null;
+      homeRecent = [];
+      awayRecent = [];
+      h2h = [];
+      statistics = [];
+    });
+
+    final api = FootballApi();
+    final requestErrors = <String>[];
+
+    Future<List<Map<String, dynamic>>> loadSection(
+      String label,
+      String path,
+      Map<String, String> query,
+    ) async {
+      try {
+        return await api.endpoint(path, query);
+      } catch (e) {
+        requestErrors.add('$label: ${e.toString().replaceFirst('Exception: ', '')}');
+        return <Map<String, dynamic>>[];
+      }
     }
+
+    // Isolate each section so one failed endpoint cannot hide other results.
+    final results = await Future.wait([
+      loadSection('Home recent form', 'fixtures', {
+        'team': homeId,
+        'last': '5',
+        'timezone': 'Africa/Lagos',
+      }),
+      loadSection('Away recent form', 'fixtures', {
+        'team': awayId,
+        'last': '5',
+        'timezone': 'Africa/Lagos',
+      }),
+      loadSection('Head-to-head', 'fixtures/headtohead', {
+        'h2h': '$homeId-$awayId',
+        'last': '5',
+        'timezone': 'Africa/Lagos',
+      }),
+      if (fixtureId != null)
+        loadSection('Match statistics', 'fixtures/statistics', {
+          'fixture': fixtureId,
+        })
+      else
+        Future.value(<Map<String, dynamic>>[]),
+    ]);
+
+    if (!mounted) return;
+    setState(() {
+      homeRecent = results[0];
+      awayRecent = results[1];
+      h2h = results[2];
+      statistics = results[3];
+      error = requestErrors.isEmpty ? null : requestErrors.join('\n');
+      loading = false;
+    });
   }
 
   @override
@@ -1489,16 +1577,16 @@ class _MatchInsightsPageState extends State<MatchInsightsPage> {
     final color = result == 'W' ? Colors.green : result == 'D'
         ? Colors.orange : result == 'L' ? Colors.red : Colors.grey;
     return Container(
-      width: expanded ? 30 : null,
-      height: 28,
-      padding: const EdgeInsets.symmetric(horizontal: 9),
+      width: expanded ? 20 : 17,
+      height: 20,
+      padding: EdgeInsets.zero,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(result, style: const TextStyle(
-        color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12,
+        color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10,
       )),
     );
   }
