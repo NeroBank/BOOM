@@ -810,7 +810,7 @@ class _HomeShellState extends State<HomeShell> {
             child: Padding(
               padding: EdgeInsets.all(14),
               child: Text(
-                'Choose a competition and tap 'Load table'. '
+                "Choose a competition and tap 'Load table'. "
                 'Only that competition will be requested from API-Football.',
                 style: TextStyle(fontSize: 11, color: Colors.grey),
               ),
