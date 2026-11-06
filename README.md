@@ -1,40 +1,74 @@
-BOOMGRATULATIONS — Android upgrade
+BOOMGRATULATIONS — Upgrade build
 
-This Flutter project preserves the supplied BOOMGRATULATIONS logo and Montserrat fonts.
+
+This is a separate upgrade workspace. It does not overwrite the existing NeroBank/BOOM repository.
 
 
 Included
 
 
-Home, Live, Picks, History, Alerts, Pro and Account sections
-
-Light, dark and system appearance options
-
-API-Football fixtures and live scores
-
-Selectable league standings seasons
-
-League positions and last-five W/D/L form boxes under team names when standings data is available
-
-Match analysis screen with each team's last five matches, head-to-head meetings and available match statistics
-
-Local match history and in-app notifications
-
-GitHub Actions APK build and Android launcher icon generation
+Red/black BOOM interface and recovered logo/font assets
 
 
-Required GitHub Actions secret
-
-Add API_FOOTBALL_KEY under repository Settings → Secrets and variables → Actions. The app cannot retrieve live football data without a valid API-Football key and an account plan that permits the requested endpoint/season.
+API-Football fixtures and live fixtures
 
 
-Optional Supabase values are passed as SUPABASE_URL and SUPABASE_ANON_KEY build-time variables. Do not add service-role or Paystack secret keys to the mobile app.
+BOOM Picks information page (clearly labelled as informational, not guaranteed AI output)
+
+
+Device-local match History (save matches from fixture cards)
+
+
+In-app notification inbox and preference toggle
+
+
+BOOM Pro information showing the recovered ₦2,000 monthly plan reference
+
+
+Optional Supabase SDK initialization using the existing project URL and publishable key
+
+
+GitHub Actions workflow to generate Android scaffolding and build an APK
+
+
+Important integration status
+
+
+Supabase URL points to the existing project. The publishable key is passed at build time.
+
+
+The existing profiles and subscriptions tables are not modified. Their exact schema and RLS rules still need source-side verification before writing user/subscription data.
+
+
+Paystack checkout is intentionally not enabled in this build. The existing secure Supabase Edge Function/webhook must be recovered and tested before payment collection is turned on.
+
+
+History and notifications in this upgrade are stored locally on the device. Cloud sync and Android push notifications require backend/FCM integration in a later verified step.
+
+
+API-Football key is supplied as a GitHub Actions secret named API_FOOTBALL_KEY.
+
+
+Supabase secrets are SUPABASE_URL and SUPABASE_ANON_KEY.
 
 
 Build
 
-Push the contents of this folder to the repository root, then open Actions → Build BOOMGRATULATIONS Android APK → Run workflow. Download the BOOMGRATULATIONS-APK artifact from the completed run.
+
+Push this project to a GitHub repository, then open Actions → Build BOOMGRATULATIONS Android APK → Run workflow.
+The APK appears under the completed workflow run's Artifacts section.
 
 
-The GitHub workflow generates the Android platform folder, runs dependency resolution and static analysis, builds a release APK, and uploads it.
+Safety
+
+
+Do not commit Paystack secret keys, Supabase service-role keys, signing passwords, or private API credentials.
+
+
+BOOMGRATULATIONS standings upgrade
+
+This version adds the seven-competition selector, on-demand cached standings,
+team last-five form indicators from the API-Football form field, and fixture
+stadium/venue names when supplied by API-Football. Standings are not requested
+automatically for all competitions at startup.
 
