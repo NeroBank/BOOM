@@ -300,104 +300,6 @@ class FootballApi {
     }
   }
 
-
-  Future<List<Map<String, dynamic>>> endpoint(
-    String path,
-    Map<String, String> query,
-  ) async {
-    if (apiKey.trim().isEmpty) {
-      throw Exception('API-Football key is missing. Add API_FOOTBALL_KEY in GitHub Secrets.');
-    }
-
-    final sortedQuery = Map<String, String>.fromEntries(
-      query.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
-    );
-    final cacheKey = 'boom_endpoint_v2_${path}_${jsonEncode(sortedQuery)}';
-    final cacheAge = path == 'fixtures/statistics'
-        ? const Duration(minutes: 3)
-        : const Duration(hours: 12);
-    final prefs = await SharedPreferences.getInstance();
-
-    List<Map<String, dynamic>>? staleRows;
-    final cachedRaw = prefs.getString(cacheKey);
-    if (cachedRaw != null) {
-      try {
-        final cached = jsonDecode(cachedRaw);
-        if (cached is Map && cached['rows'] is List) {
-          staleRows = (cached['rows'] as List)
-              .whereType<Map>()
-              .map((row) => Map<String, dynamic>.from(row))
-              .toList();
-          final savedAt = DateTime.tryParse(cached['savedAt']?.toString() ?? '');
-          if (savedAt != null &&
-              DateTime.now().difference(savedAt) < cacheAge) {
-            return staleRows;
-          }
-        }
-      } catch (_) {
-        staleRows = null;
-      }
-    }
-
-    if (_rateLimitedUntil != null &&
-        DateTime.now().isBefore(_rateLimitedUntil!)) {
-      if (staleRows != null && staleRows.isNotEmpty) return staleRows;
-      throw Exception('API-Football rate limit reached. Try again after the cooldown.');
-    }
-
-    try {
-      final uri = Uri.parse('$apiBase/$path').replace(
-        queryParameters: sortedQuery,
-      );
-      final response = await _queueRequest(() => http.get(
-        uri,
-        headers: {'x-apisports-key': apiKey},
-      ).timeout(const Duration(seconds: 25)));
-
-      if (response.statusCode == 429) {
-        _rateLimitedUntil = DateTime.now().add(_rateLimitCooldown);
-        throw Exception('API-Football rate limit reached. Please wait and retry.');
-      }
-      if (response.statusCode != 200) {
-        throw Exception('$path returned HTTP ${response.statusCode}.');
-      }
-
-      final body = jsonDecode(response.body);
-      if (body is! Map) throw Exception('Unexpected API response for $path.');
-      final errors = body['errors'];
-      if (errors is Map && errors.isNotEmpty) {
-        final message = errors.values.map((value) => value.toString()).join(', ');
-        if (message.toLowerCase().contains('rate limit') ||
-            message.toLowerCase().contains('too many requests')) {
-          _rateLimitedUntil = DateTime.now().add(_rateLimitCooldown);
-        }
-        throw Exception(message);
-      }
-
-      final rows = body['response'];
-      final result = rows is List
-          ? rows.whereType<Map>()
-              .map((row) => Map<String, dynamic>.from(row))
-              .toList()
-          : <Map<String, dynamic>>[];
-
-      // Do not replace useful saved data with an empty response.
-      if (result.isNotEmpty) {
-        await prefs.setString(cacheKey, jsonEncode({
-          'savedAt': DateTime.now().toIso8601String(),
-          'rows': result,
-        }));
-      } else if (staleRows != null && staleRows.isNotEmpty) {
-        return staleRows;
-      }
-      _rateLimitedUntil = null;
-      return result;
-    } catch (_) {
-      if (staleRows != null && staleRows.isNotEmpty) return staleRows;
-      rethrow;
-    }
-  }
-
   String _date(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
@@ -458,7 +360,7 @@ class _HomeShellState extends State<HomeShell> {
   bool notificationsEnabled = true;
   bool notificationSoundEnabled = true;
   int selectedLeagueId = 39;
-  int selectedSeason = 2024;
+  int selectedSeason = 2026;
   bool standingsLoading = false;
   String? standingsError;
   List<Map<String, dynamic>> standingsRows = [];
@@ -651,40 +553,27 @@ class _HomeShellState extends State<HomeShell> {
     child: ListView(
       padding: const EdgeInsets.all(14),
       children: [
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [brandRed, Color(0xFF7F0000)],
-            ),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'YOUR FOOTBALL CENTRE',
-                style: TextStyle(
-                  color: Colors.white70,
-                  letterSpacing: 1.1,
-                  fontSize: 10,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Football. Predictions. Results.',
+        ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Image.asset(
+            'assets/football_stadium_banner.jpg',
+            width: double.infinity,
+            height: 170,
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+            errorBuilder: (context, error, stackTrace) => Container(
+              height: 170,
+              alignment: Alignment.center,
+              color: brandRed,
+              child: const Text(
+                'BOOMGRATULATIONS',
                 style: TextStyle(
                   color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 21,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
                 ),
               ),
-              SizedBox(height: 6),
-              Text(
-                'Fixtures 鈥� Live scores 鈥� Match history',
-                style: TextStyle(color: Colors.white70, fontSize: 11),
-              ),
-            ],
+            ),
           ),
         ),
         const SizedBox(height: 18),
@@ -727,34 +616,12 @@ class _HomeShellState extends State<HomeShell> {
                           });
                         },
                 ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<int>(
-                  value: selectedSeason,
-                  decoration: const InputDecoration(
-                    labelText: 'Table season',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  items: [2026, 2025, 2024, 2023, 2022].map((year) =>
-                    DropdownMenuItem<int>(
-                      value: year,
-                      child: Text(year.toString()),
-                    )).toList(),
-                  onChanged: standingsLoading ? null : (year) {
-                    if (year == null) return;
-                    setState(() {
-                      selectedSeason = year;
-                      standingsRows = [];
-                      standingsError = null;
-                    });
-                  },
-                ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
                       child: Text(
-                        'Season $selectedSeason 鈥� Table is loaded only when requested',
+                        'Season $selectedSeason — Table is loaded only when requested',
                         style: const TextStyle(
                           color: Colors.grey,
                           fontSize: 10,
@@ -810,7 +677,7 @@ class _HomeShellState extends State<HomeShell> {
             child: Padding(
               padding: EdgeInsets.all(14),
               child: Text(
-                "Choose a competition and tap 'Load table'. "
+                'Choose a competition and tap Load table. '
                 'Only that competition will be requested from API-Football.',
                 style: TextStyle(fontSize: 11, color: Colors.grey),
               ),
@@ -853,7 +720,7 @@ class _HomeShellState extends State<HomeShell> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${competition['name']} 鈥� ${competition['country']}',
+                    '${competition['name']} — ${competition['country']}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 15,
@@ -932,8 +799,8 @@ class _HomeShellState extends State<HomeShell> {
                             const SizedBox(height: 3),
                             Text(
                               'Position $rank',
-                              style: TextStyle(
-                                color: _positionColor(rank),
+                              style: const TextStyle(
+                                color: brandRed,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w900,
                               ),
@@ -974,7 +841,7 @@ class _HomeShellState extends State<HomeShell> {
           const Padding(
             padding: EdgeInsets.fromLTRB(14, 4, 14, 12),
             child: Text(
-              'W = Win 鈥� D = Draw 鈥� L = Lost. Position is shown in red beneath each team form. Last-five form is shown separately below when supplied by API-Football.',
+              'W = Win — D = Draw — L = Lost. Position is shown in red beneath each team form. Last-five form is shown separately below when supplied by API-Football.',
               style: TextStyle(color: Colors.grey, fontSize: 9),
             ),
           ),
@@ -986,67 +853,6 @@ class _HomeShellState extends State<HomeShell> {
   int _standingsInt(dynamic value) {
     if (value is int) return value;
     return int.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-
-  int? _positionForTeam(dynamic teamId) {
-    for (final row in standingsRows) {
-      final team = row['team'] as Map? ?? {};
-      if (team['id']?.toString() == teamId?.toString()) {
-        final rank = int.tryParse(row['rank']?.toString() ?? '');
-        if (rank != null && rank > 0) return rank;
-      }
-    }
-    return null;
-  }
-
-  String _formForTeam(dynamic teamId) {
-    for (final row in standingsRows) {
-      final team = row['team'] as Map? ?? {};
-      if (team['id']?.toString() == teamId?.toString()) {
-        return row['form']?.toString() ?? '';
-      }
-    }
-    return '';
-  }
-
-  Widget _teamSummary(String name, dynamic teamId, {bool alignEnd = false}) {
-    final position = _positionForTeam(teamId);
-    final form = _formForTeam(teamId);
-    final alignment = alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    return Column(
-      crossAxisAlignment: alignment,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(name,
-          textAlign: alignEnd ? TextAlign.end : TextAlign.start,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 3),
-        Text(
-          position == null ? 'Position: load league table' : 'Position: $position',
-          textAlign: alignEnd ? TextAlign.end : TextAlign.start,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w800,
-            color: position == null ? Colors.grey : _positionColor(position),
-          ),
-        ),
-        if (form.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          _formIndicators(form),
-        ],
-      ],
-    );
-  }
-
-  Color _positionColor(int position) {
-    if (position <= 3) return Colors.green;
-    final teamCount = standingsRows.length;
-    if (teamCount > 0 && position >= teamCount - 2) return Colors.red;
-    return Colors.blue;
   }
 
   Widget _teamLogo(String? url) {
@@ -1082,7 +888,7 @@ class _HomeShellState extends State<HomeShell> {
         : chars;
 
     if (lastFive.isEmpty) {
-      return const Text('鈥�', style: TextStyle(color: Colors.grey));
+      return const Text('—', style: TextStyle(color: Colors.grey));
     }
 
     return Row(
@@ -1102,19 +908,20 @@ class _HomeShellState extends State<HomeShell> {
         }
 
         return Container(
-          width: 17,
-          height: 17,
+          width: 21,
+          height: 21,
           margin: const EdgeInsets.only(right: 3),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(4),
+            color: color.withOpacity(.18),
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: color.withOpacity(.65)),
           ),
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
+            style: TextStyle(
+              color: color,
+              fontSize: 9,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -1145,7 +952,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget _historyPage() => ListView(padding: const EdgeInsets.all(14), children: [
     _section('Match History', 'Matches you chose to save on this device'),
     if (history.isEmpty) _empty('Your history is empty', 'Open a match and tap Save to History to keep it here.')
-    else ...history.map((m) => Card(child: ListTile(leading: const Icon(Icons.history,color:brandRed), title: Text('${m['home']} vs ${m['away']}'), subtitle: Text('${m['league']} 鈥� ${m['score']}'), trailing: IconButton(icon:const Icon(Icons.delete_outline),onPressed:() async { history.remove(m); await LocalStore.write(LocalStore.historyKey,history); setState((){}); })))),
+    else ...history.map((m) => Card(child: ListTile(leading: const Icon(Icons.history,color:brandRed), title: Text('${m['home']} vs ${m['away']}'), subtitle: Text('${m['league']} — ${m['score']}'), trailing: IconButton(icon:const Icon(Icons.delete_outline),onPressed:() async { history.remove(m); await LocalStore.write(LocalStore.historyKey,history); setState((){}); })))),
   ]);
   Widget _notificationsPage() => ListView(padding: const EdgeInsets.all(14), children: [
     _section('Notifications', 'BOOM app updates and saved alerts'),
@@ -1188,7 +995,7 @@ class _HomeShellState extends State<HomeShell> {
     Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       const Icon(Icons.workspace_premium,color:brandRed,size:42),
       const SizedBox(height:10), const Text('BOOM PRO',style:TextStyle(fontSize:22,fontWeight:FontWeight.w900)),
-      const Text('鈧�2,000 / month',style:TextStyle(fontSize:19,fontWeight:FontWeight.bold,color:brandRed)),
+      const Text('NGN 2,000 / month',style:TextStyle(fontSize:19,fontWeight:FontWeight.bold,color:brandRed)),
       const SizedBox(height:8), const Text('Existing Paystack plan reference: PLN_dx1vkqqoydbnsqe'),
       const SizedBox(height:8), const Text('Checkout and subscription verification must be reconnected to the existing secure Supabase Edge Function before payments can be accepted. No payment is taken in this upgrade preview.'),
       const SizedBox(height:12), const Chip(label:Text('Payment connection pending verification')),
@@ -1237,15 +1044,7 @@ class _HomeShellState extends State<HomeShell> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 9),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => MatchInsightsPage(
-            match: m,
-            standingsRows: standingsRows,
-          ),
-        )),
-        child: Padding(
+      child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
@@ -1253,7 +1052,7 @@ class _HomeShellState extends State<HomeShell> {
               children: [
                 Expanded(
                   child: Text(
-                    '${league['name'] ?? 'Football'} 鈥� ${league['country'] ?? ''}',
+                    '${league['name'] ?? 'Football'} — ${league['country'] ?? ''}',
                     style: const TextStyle(
                       color: Colors.grey,
                       fontSize: 10,
@@ -1274,23 +1073,22 @@ class _HomeShellState extends State<HomeShell> {
             Row(
               children: [
                 Expanded(
-                  child: _teamSummary(
-                    h['name']?.toString() ?? 'Home',
-                    h['id'],
+                  child: Text(
+                    h['name'] ?? 'Home',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    maxLines: 2,
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    score,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
+                Text(
+                  score,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
                 ),
                 Expanded(
-                  child: _teamSummary(
-                    a['name']?.toString() ?? 'Away',
-                    a['id'],
-                    alignEnd: true,
+                  child: Text(
+                    a['name'] ?? 'Away',
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    maxLines: 2,
                   ),
                 ),
               ],
@@ -1342,369 +1140,7 @@ class _HomeShellState extends State<HomeShell> {
             ),
           ],
         ),
-        ),
       ),
     );
-  }
-}
-
-
-class MatchInsightsPage extends StatefulWidget {
-  const MatchInsightsPage({
-    super.key,
-    required this.match,
-    required this.standingsRows,
-  });
-
-  final Map<String, dynamic> match;
-  final List<Map<String, dynamic>> standingsRows;
-
-  @override
-  State<MatchInsightsPage> createState() => _MatchInsightsPageState();
-}
-
-class _MatchInsightsPageState extends State<MatchInsightsPage> {
-  bool loading = true;
-  String? error;
-  List<Map<String, dynamic>> homeRecent = [];
-  List<Map<String, dynamic>> awayRecent = [];
-  List<Map<String, dynamic>> h2h = [];
-  List<Map<String, dynamic>> statistics = [];
-
-  Map? get _teams => widget.match['teams'] as Map?;
-  Map? get _home => _teams?['home'] as Map?;
-  Map? get _away => _teams?['away'] as Map?;
-  Map? get _fixture => widget.match['fixture'] as Map?;
-  Map? get _league => widget.match['league'] as Map?;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadInsights();
-  }
-
-  Future<void> _loadInsights() async {
-    final homeId = _home?['id']?.toString();
-    final awayId = _away?['id']?.toString();
-    final fixtureId = _fixture?['id']?.toString();
-
-    if (homeId == null || awayId == null) {
-      if (!mounted) return;
-      setState(() {
-        loading = false;
-        error = 'Team identifiers are missing from this fixture.';
-      });
-      return;
-    }
-
-    setState(() {
-      loading = true;
-      error = null;
-      homeRecent = [];
-      awayRecent = [];
-      h2h = [];
-      statistics = [];
-    });
-
-    final api = FootballApi();
-    final requestErrors = <String>[];
-
-    Future<List<Map<String, dynamic>>> loadSection(
-      String label,
-      String path,
-      Map<String, String> query,
-    ) async {
-      try {
-        return await api.endpoint(path, query);
-      } catch (e) {
-        requestErrors.add('$label: ${e.toString().replaceFirst('Exception: ', '')}');
-        return <Map<String, dynamic>>[];
-      }
-    }
-
-    // Isolate each section so one failed endpoint cannot hide other results.
-    final results = await Future.wait([
-      loadSection('Home recent form', 'fixtures', {
-        'team': homeId,
-        'last': '5',
-        'timezone': 'Africa/Lagos',
-      }),
-      loadSection('Away recent form', 'fixtures', {
-        'team': awayId,
-        'last': '5',
-        'timezone': 'Africa/Lagos',
-      }),
-      loadSection('Head-to-head', 'fixtures/headtohead', {
-        'h2h': '$homeId-$awayId',
-        'last': '5',
-        'timezone': 'Africa/Lagos',
-      }),
-      if (fixtureId != null)
-        loadSection('Match statistics', 'fixtures/statistics', {
-          'fixture': fixtureId,
-        })
-      else
-        Future.value(<Map<String, dynamic>>[]),
-    ]);
-
-    if (!mounted) return;
-    setState(() {
-      homeRecent = results[0];
-      awayRecent = results[1];
-      h2h = results[2];
-      statistics = results[3];
-      error = requestErrors.isEmpty ? null : requestErrors.join('\n');
-      loading = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final goals = widget.match['goals'] as Map? ?? {};
-    final homeName = _home?['name']?.toString() ?? 'Home';
-    final awayName = _away?['name']?.toString() ?? 'Away';
-    final score = goals['home'] == null && goals['away'] == null
-        ? 'VS'
-        : '${goals['home']} - ${goals['away']}';
-    return Scaffold(
-      appBar: AppBar(title: const Text('Match analysis')),
-      body: RefreshIndicator(
-        onRefresh: _loadInsights,
-        child: ListView(
-          padding: const EdgeInsets.all(14),
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(children: [
-                  Text(_league?['name']?.toString() ?? 'Football',
-                      style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    Expanded(child: Text(homeName,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontWeight: FontWeight.w800))),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(score,
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-                    ),
-                    Expanded(child: Text(awayName,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontWeight: FontWeight.w800))),
-                  ]),
-                  const SizedBox(height: 8),
-                  Text(_fixture?['date']?.toString() ?? '',
-                      style: const TextStyle(color: Colors.grey, fontSize: 10)),
-                ]),
-              ),
-            ),
-            if (loading) const LinearProgressIndicator(),
-            if (error != null)
-              Card(child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text('Some analysis data could not be loaded: $error'),
-              )),
-            _sectionTitle('Last five matches'),
-            _recentCard(homeName, _home?['id']?.toString(), homeRecent),
-            _recentCard(awayName, _away?['id']?.toString(), awayRecent),
-            _sectionTitle('Head-to-head 鈥� last five meetings'),
-            _h2hCard(homeName, awayName),
-            _sectionTitle('Match statistics'),
-            _statisticsCard(homeName, awayName),
-            const Padding(
-              padding: EdgeInsets.all(10),
-              child: Text(
-                'W = Win, D = Draw, L = Lost. Statistics are shown only when supplied by API-Football. A match that has not started may not have statistics yet.',
-                style: TextStyle(color: Colors.grey, fontSize: 10),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String value) => Padding(
-    padding: const EdgeInsets.fromLTRB(2, 14, 2, 7),
-    child: Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-  );
-
-  Widget _recentCard(String teamName, String? teamId, List<Map<String, dynamic>> games) {
-    if (games.isEmpty) {
-      return Card(child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Text('$teamName: recent form unavailable.'),
-      ));
-    }
-    return Card(child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(teamName, style: const TextStyle(fontWeight: FontWeight.w800)),
-        const SizedBox(height: 8),
-        Wrap(spacing: 5, runSpacing: 5, children: games.map((game) {
-          final teams = game['teams'] as Map? ?? {};
-          final home = teams['home'] as Map? ?? {};
-          final away = teams['away'] as Map? ?? {};
-          final goals = game['goals'] as Map? ?? {};
-          final isHome = home['id']?.toString() == teamId;
-          final own = isHome ? goals['home'] : goals['away'];
-          final opp = isHome ? goals['away'] : goals['home'];
-          final result = own == null || opp == null
-              ? '?' : (own > opp ? 'W' : own < opp ? 'L' : 'D');
-          return _resultBox(result, expanded: true);
-        }).toList()),
-        const SizedBox(height: 8),
-        ...games.map((game) {
-          final teams = game['teams'] as Map? ?? {};
-          final home = teams['home'] as Map? ?? {};
-          final away = teams['away'] as Map? ?? {};
-          final goals = game['goals'] as Map? ?? {};
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Text(
-              '${home['name'] ?? 'Home'} ${goals['home'] ?? '-'} - ${goals['away'] ?? '-'} ${away['name'] ?? 'Away'}',
-              style: const TextStyle(fontSize: 11),
-            ),
-          );
-        }),
-      ]),
-    ));
-  }
-
-  Widget _resultBox(String result, {bool expanded = false}) {
-    final color = result == 'W' ? Colors.green : result == 'D'
-        ? Colors.orange : result == 'L' ? Colors.red : Colors.grey;
-    return Container(
-      width: expanded ? 20 : 17,
-      height: 20,
-      padding: EdgeInsets.zero,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(result, style: const TextStyle(
-        color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10,
-      )),
-    );
-  }
-
-  Widget _h2hCard(String homeName, String awayName) {
-    if (h2h.isEmpty) {
-      return const Card(child: Padding(
-        padding: EdgeInsets.all(12),
-        child: Text('No head-to-head records returned by the football data provider.'),
-      ));
-    }
-    var homeWins = 0, draws = 0, awayWins = 0;
-    for (final game in h2h) {
-      final teams = game['teams'] as Map? ?? {};
-      final goals = game['goals'] as Map? ?? {};
-      final homeId = _home?['id']?.toString();
-      final homeGoals = goals['home'];
-      final awayGoals = goals['away'];
-      if (homeGoals == null || awayGoals == null) continue;
-      final winner = homeGoals > awayGoals
-          ? (teams['home']?['id']?.toString() == homeId ? 'home' : 'away')
-          : homeGoals < awayGoals
-              ? (teams['away']?['id']?.toString() == homeId ? 'home' : 'away')
-              : 'draw';
-      if (winner == 'home') homeWins++;
-      else if (winner == 'away') awayWins++;
-      else draws++;
-    }
-    return Card(child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(children: [
-        Row(children: [
-          Expanded(child: Column(children: [
-            Text(homeName, textAlign: TextAlign.center),
-            Text('$homeWins wins', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w900)),
-          ])),
-          const Text('|'),
-          Expanded(child: Column(children: [
-            const Text('Draws'),
-            Text('$draws', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w900)),
-          ])),
-          const Text('|'),
-          Expanded(child: Column(children: [
-            Text(awayName, textAlign: TextAlign.center),
-            Text('$awayWins wins', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w900)),
-          ])),
-        ]),
-        const Divider(),
-        ...h2h.map((game) {
-          final teams = game['teams'] as Map? ?? {};
-          final home = teams['home'] as Map? ?? {};
-          final away = teams['away'] as Map? ?? {};
-          final goals = game['goals'] as Map? ?? {};
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Text(
-              '${home['name'] ?? ''} ${goals['home'] ?? '-'} - ${goals['away'] ?? '-'} ${away['name'] ?? ''}',
-              style: const TextStyle(fontSize: 11),
-              textAlign: TextAlign.center,
-            ),
-          );
-        }),
-      ]),
-    ));
-  }
-
-  Widget _statisticsCard(String homeName, String awayName) {
-    if (statistics.isEmpty) {
-      return const Card(child: Padding(
-        padding: EdgeInsets.all(12),
-        child: Text('Match statistics are not available yet. They are normally returned after kick-off.'),
-      ));
-    }
-    final byTeam = <String, Map<String, dynamic>>{};
-    for (final entry in statistics) {
-      final team = entry['team'] as Map? ?? {};
-      final values = entry['statistics'] as List? ?? [];
-      final map = <String, dynamic>{};
-      for (final item in values) {
-        if (item is Map && item['type'] != null) {
-          map[item['type'].toString()] = item['value'];
-        }
-      }
-      byTeam[team['id']?.toString() ?? ''] = map;
-    }
-    final homeStats = byTeam[_home?['id']?.toString()] ?? {};
-    final awayStats = byTeam[_away?['id']?.toString()] ?? {};
-    final keys = <String>[
-      'Ball Possession', 'Total Shots', 'Shots on Goal', 'Shots off Goal',
-      'Corner Kicks', 'Fouls', 'Yellow Cards', 'Red Cards', 'Offsides',
-      'Goalkeeper Saves', 'Total passes', 'Passes %',
-    ];
-    final rows = keys.where((key) =>
-      homeStats.containsKey(key) || awayStats.containsKey(key)).toList();
-    if (rows.isEmpty) {
-      return const Card(child: Padding(
-        padding: EdgeInsets.all(12),
-        child: Text('The provider has not supplied detailed statistics for this fixture.'),
-      ));
-    }
-    return Card(child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(children: [
-        Row(children: [
-          Expanded(child: Text(homeName, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w800))),
-          const Expanded(child: Text('STAT', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 10))),
-          Expanded(child: Text(awayName, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w800))),
-        ]),
-        const Divider(),
-        ...rows.map((key) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(children: [
-            Expanded(child: Text('${homeStats[key] ?? '-'}', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w800))),
-            Expanded(child: Text(key, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Colors.grey))),
-            Expanded(child: Text('${awayStats[key] ?? '-'}', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w800))),
-          ]),
-        )),
-      ]),
-    ));
   }
 }
