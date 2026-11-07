@@ -553,27 +553,56 @@ class _HomeShellState extends State<HomeShell> {
     child: ListView(
       padding: const EdgeInsets.all(14),
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: Image.asset(
-            'assets/football_stadium_banner.jpg',
-            width: double.infinity,
-            height: 170,
-            fit: BoxFit.cover,
-            alignment: Alignment.center,
-            errorBuilder: (context, error, stackTrace) => Container(
-              height: 170,
-              alignment: Alignment.center,
-              color: brandRed,
-              child: const Text(
-                'BOOMGRATULATIONS',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [brandRed, Color(0xFF7F0000)],
+            ),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Stack(
+            alignment: Alignment.centerRight,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(right: 68),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'YOUR FOOTBALL CENTRE',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        letterSpacing: 1.1,
+                        fontSize: 10,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Football. Predictions. Results.',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 21,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'Fixtures - Live scores - Match history',
+                      style: TextStyle(color: Colors.white70, fontSize: 11),
+                    ),
+                  ],
                 ),
               ),
-            ),
+              const Padding(
+                padding: EdgeInsets.only(right: 2),
+                child: Icon(
+                  Icons.sports_soccer,
+                  color: Colors.white,
+                  size: 58,
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 18),
